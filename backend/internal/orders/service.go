@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"time"
 
@@ -43,7 +44,7 @@ func (s *Service) Create(ctx context.Context, customerID string, req CreateOrder
 	if sched.Status != "approved" {
 		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "baker is not accepting orders")
 	}
-	if err := s.checkFulfillment(ctx, req.BakerID, *sched, eventDate); err != nil {
+	if err := s.checkFulfillment(ctx, req.BakerID, *sched, eventDate, ""); err != nil {
 		return nil, err
 	}
 
@@ -108,8 +109,9 @@ func (s *Service) Cancel(ctx context.Context, actor Actor, id string) (*Order, e
 }
 
 // checkFulfillment enforces the scheduling guards: lead time, blackout dates,
-// and daily capacity.
-func (s *Service) checkFulfillment(ctx context.Context, bakerID string, sched bakerScheduling, eventDate time.Time) error {
+// and daily capacity. excludeOrderID omits one order from the capacity count
+// (used when re-validating an order that already occupies a slot).
+func (s *Service) checkFulfillment(ctx context.Context, bakerID string, sched bakerScheduling, eventDate time.Time, excludeOrderID string) error {
 	today := s.now().UTC().Truncate(24 * time.Hour)
 	earliest := today.AddDate(0, 0, sched.LeadTimeDays)
 	if eventDate.Before(earliest) {
@@ -124,7 +126,7 @@ func (s *Service) checkFulfillment(ctx context.Context, bakerID string, sched ba
 		return pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation,
 			"baker is unavailable on that date")
 	}
-	count, err := s.repo.CountOrdersOn(ctx, bakerID, eventDate)
+	count, err := s.repo.CountOrdersOn(ctx, bakerID, eventDate, excludeOrderID)
 	if err != nil {
 		return err
 	}
@@ -133,6 +135,74 @@ func (s *Service) checkFulfillment(ctx context.Context, bakerID string, sched ba
 			"baker is fully booked on that date")
 	}
 	return nil
+}
+
+// CommissionRate is the platform commission taken on completed orders (5%).
+const CommissionRate = 0.05
+
+// OrderByID loads an order without authorization (for use by collaborating
+// domains such as quotes, which apply their own checks).
+func (s *Service) OrderByID(ctx context.Context, id string) (*Order, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+// BakerUserID returns the user id that owns a baker profile.
+func (s *Service) BakerUserID(ctx context.Context, bakerID string) (string, error) {
+	sched, err := s.repo.BakerScheduling(ctx, bakerID)
+	if err != nil {
+		return "", err
+	}
+	return sched.UserID, nil
+}
+
+// OnQuoteProposed moves an order into QUOTED when a baker proposes (or revises)
+// a quote. Valid from QUOTE_REQUESTED, NEGOTIATING, or QUOTED (idempotent).
+func (s *Service) OnQuoteProposed(ctx context.Context, orderID string) error {
+	o, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	switch o.Status {
+	case StatusQuoteRequested, StatusNegotiating, StatusQuoted:
+		return s.repo.UpdateStatus(ctx, orderID, StatusQuoted)
+	default:
+		return pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "cannot quote an order in "+o.Status)
+	}
+}
+
+// OnQuoteAccepted re-validates fulfillment, records the financial breakdown, and
+// transitions the order to APPROVED. depositPct is a percentage (0-100).
+func (s *Service) OnQuoteAccepted(ctx context.Context, orderID string, total, depositPct float64) (*Order, error) {
+	o, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status != StatusQuoted {
+		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "order is not awaiting acceptance")
+	}
+	sched, err := s.repo.BakerScheduling(ctx, o.BakerID)
+	if err != nil {
+		return nil, err
+	}
+	if o.EventDate != nil {
+		if err := s.checkFulfillment(ctx, o.BakerID, *sched, *o.EventDate, o.ID); err != nil {
+			return nil, err
+		}
+	}
+	deposit := round2(total * depositPct / 100)
+	commission := round2(total * CommissionRate)
+	balance := round2(total - deposit)
+	if err := s.repo.SetAmountsAndStatus(ctx, orderID, total, deposit, balance, commission, StatusApproved); err != nil {
+		return nil, err
+	}
+	o.TotalAmount, o.DepositAmount, o.BalanceAmount, o.CommissionAmount = total, deposit, balance, commission
+	o.Status = StatusApproved
+	return o, nil
+}
+
+// round2 rounds a monetary value to two decimal places.
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // authorize permits the order's customer, its baker, or an admin.

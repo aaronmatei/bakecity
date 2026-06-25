@@ -218,8 +218,9 @@ func (r *Repository) IsBlackout(ctx context.Context, bakerID string, date time.T
 	return exists, err
 }
 
-// CountOrdersOn counts a baker's non-cancelled orders booked for a given date.
-func (r *Repository) CountOrdersOn(ctx context.Context, bakerID string, date time.Time) (int, error) {
+// CountOrdersOn counts a baker's non-cancelled orders booked for a given date,
+// optionally excluding one order id (e.g. the order being re-validated).
+func (r *Repository) CountOrdersOn(ctx context.Context, bakerID string, date time.Time, excludeOrderID string) (int, error) {
 	if r.db == nil {
 		return 0, pkg.ErrNotImplemented
 	}
@@ -227,8 +228,25 @@ func (r *Repository) CountOrdersOn(ctx context.Context, bakerID string, date tim
 	err := r.db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM orders
 		  WHERE baker_id = $1 AND event_date = $2
-		    AND status NOT IN ('`+StatusCancelled+`', '`+StatusRefunded+`')`,
-		bakerID, date,
+		    AND status NOT IN ('`+StatusCancelled+`', '`+StatusRefunded+`')
+		    AND ($3 = '' OR id <> $3::uuid)`,
+		bakerID, date, excludeOrderID,
 	).Scan(&n)
 	return n, err
+}
+
+// SetAmountsAndStatus records the financial breakdown and transitions an order's
+// status in a single update.
+func (r *Repository) SetAmountsAndStatus(ctx context.Context, id string, total, deposit, balance, commission float64, status string) error {
+	if r.db == nil {
+		return pkg.ErrNotImplemented
+	}
+	_, err := r.db.Exec(ctx,
+		`UPDATE orders
+		    SET total_amount = $2, deposit_amount = $3, balance_amount = $4,
+		        commission_amount = $5, status = $6, updated_at = now()
+		  WHERE id = $1`,
+		id, total, deposit, balance, commission, status,
+	)
+	return err
 }
