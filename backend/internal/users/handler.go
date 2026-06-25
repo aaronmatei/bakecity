@@ -1,8 +1,11 @@
 package users
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/corebalt/bakecity/internal/middleware"
 	"github.com/corebalt/bakecity/pkg"
 )
 
@@ -24,10 +27,25 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 // GetMe handles GET /me.
 func (h *Handler) GetMe(c *gin.Context) {
-	pkg.NotImplemented(c)
+	u, err := h.svc.GetMe(c.Request.Context(), middleware.UserIDFromContext(c))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, u)
 }
 
 // UpdateMe handles PATCH /me.
 func (h *Handler) UpdateMe(c *gin.Context) {
-	pkg.NotImplemented(c)
+	var req UpdateMeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	u, err := h.svc.UpdateMe(c.Request.Context(), middleware.UserIDFromContext(c), req)
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, u)
 }
