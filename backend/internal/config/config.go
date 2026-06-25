@@ -1,0 +1,79 @@
+package config
+
+import (
+	"os"
+
+	"github.com/joho/godotenv"
+)
+
+// Config holds all runtime configuration loaded from the environment.
+type Config struct {
+	Port string
+	Env  string
+
+	DatabaseURL string
+	RedisURL    string
+
+	JWTSecret string
+
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSRegion          string
+	AWSBucket          string
+
+	PSPProvider  string
+	PSPAPIKey    string
+	PSPAPISecret string
+
+	FCMServerKey string
+
+	ATAPIKey   string
+	ATUsername string
+
+	AdminEmail string
+}
+
+// Load reads configuration from a .env file (if present) and the environment,
+// applying sane defaults for local development.
+func Load() *Config {
+	// Best-effort: ignore a missing .env file.
+	_ = godotenv.Load()
+
+	return &Config{
+		Port: getEnv("PORT", "8080"),
+		Env:  getEnv("ENV", "development"),
+
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/bakecity?sslmode=disable"),
+		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
+
+		JWTSecret: getEnv("JWT_SECRET", "dev-insecure-secret-change-me"),
+
+		AWSAccessKeyID:     getEnv("AWS_ACCESS_KEY_ID", ""),
+		AWSSecretAccessKey: getEnv("AWS_SECRET_ACCESS_KEY", ""),
+		AWSRegion:          getEnv("AWS_REGION", "us-east-1"),
+		AWSBucket:          getEnv("AWS_BUCKET_NAME", "bakecity"),
+
+		PSPProvider:  getEnv("PSP_PROVIDER", "pesapal"),
+		PSPAPIKey:    getEnv("PSP_API_KEY", ""),
+		PSPAPISecret: getEnv("PSP_API_SECRET", ""),
+
+		FCMServerKey: getEnv("FCM_SERVER_KEY", ""),
+
+		ATAPIKey:   getEnv("AT_API_KEY", ""),
+		ATUsername: getEnv("AT_USERNAME", ""),
+
+		AdminEmail: getEnv("ADMIN_EMAIL", "admin@bakecity.local"),
+	}
+}
+
+// IsProduction reports whether the app runs in a production environment.
+func (c *Config) IsProduction() bool {
+	return c.Env == "production" || c.Env == "prod"
+}
+
+func getEnv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	return fallback
+}

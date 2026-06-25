@@ -1,0 +1,65 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/helpers/formatters.dart';
+import '../../../widgets/app_error_view.dart';
+import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/primary_button.dart';
+import '../application/products_controller.dart';
+
+class ProductDetailScreen extends ConsumerWidget {
+  const ProductDetailScreen({super.key, required this.productId});
+
+  final String productId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final product = ref.watch(productDetailProvider(productId));
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Product')),
+      body: product.when(
+        loading: () => const LoadingIndicator(),
+        error: (e, _) => AppErrorView(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(productDetailProvider(productId)),
+        ),
+        data: (p) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.image_outlined, size: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(p.name, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              'From ${Formatters.currencyFromCents(p.basePriceCents)}',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(color: theme.colorScheme.primary),
+            ),
+            const SizedBox(height: 16),
+            if (p.description != null) Text(p.description!),
+            const SizedBox(height: 8),
+            Text('Lead time: ${p.leadTimeDays} day(s)'),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'Request a custom order',
+              icon: Icons.add_shopping_cart_outlined,
+              onPressed: () {
+                // TODO: Start the order request flow for this product.
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

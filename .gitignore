@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.local
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*:Zone.Identifier
+.claude/
+
+# Backend (Go)
+backend/bakecity
+backend/bin/
+backend/*.out
+backend/coverage.*
+
+# Frontend (Flutter) — full ignores live in frontend/.gitignore
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+
+# Logs
+*.log
