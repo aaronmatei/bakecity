@@ -66,30 +66,24 @@ flutter-run:
 flutter-build:
 	cd frontend && flutter build apk
 
-# Database targets
+# Database / service targets (Postgres+PostGIS and Redis via docker-compose).
+# Host Postgres uses 5432 and another project's Redis uses 6379 on this box,
+# so compose publishes Postgres on 5435 and Redis on 6380 — see docker-compose.yml.
 .PHONY: db-start
 db-start:
-	docker run -d \
-		--name bakecity-postgres \
-		-e POSTGRES_PASSWORD=password \
-		-e POSTGRES_DB=bakecity \
-		-p 5432:5432 \
-		postgres:15-alpine
+	docker compose up -d postgres
 
 .PHONY: db-stop
 db-stop:
-	docker stop bakecity-postgres && docker rm bakecity-postgres
+	docker compose stop postgres
 
 .PHONY: redis-start
 redis-start:
-	docker run -d \
-		--name bakecity-redis \
-		-p 6379:6379 \
-		redis:7-alpine
+	docker compose up -d redis
 
 .PHONY: redis-stop
 redis-stop:
-	docker stop bakecity-redis && docker rm bakecity-redis
+	docker compose stop redis
 
 .PHONY: services-start
 services-start: db-start redis-start

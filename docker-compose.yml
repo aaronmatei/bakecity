@@ -1,14 +1,13 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.4
     environment:
       POSTGRES_DB: bakecity
       POSTGRES_USER: bakecity
       POSTGRES_PASSWORD: bakecity_dev
+    # Host 5432 is taken by a system Postgres; publish on 5435 to avoid the clash.
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +18,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Host 6379 is taken by another project's Redis; publish on 6380.
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
