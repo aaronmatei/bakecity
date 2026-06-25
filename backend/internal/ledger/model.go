@@ -11,6 +11,19 @@ const (
 	AccountRefunds         = "refunds"
 )
 
+// Transaction kinds.
+const (
+	TxnDeposit = "deposit"
+	TxnBalance = "balance"
+	TxnRelease = "release"
+	TxnRefund  = "refund"
+)
+
+// platformOwner is the synthetic owner id for singleton platform accounts
+// (platform_revenue, refunds). A concrete value is used rather than NULL so the
+// UNIQUE(kind, owner_id) constraint actually dedupes them.
+const platformOwner = "00000000-0000-0000-0000-000000000000"
+
 // Account maps to the ledger_accounts table.
 type Account struct {
 	ID      string `json:"id"`
