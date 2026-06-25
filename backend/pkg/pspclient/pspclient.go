@@ -5,6 +5,7 @@ package pspclient
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/corebalt/bakecity/pkg"
 )
@@ -81,7 +82,11 @@ type PSPClient interface {
 	VerifyWebhook(ctx context.Context, signature string, body []byte) (*WebhookEvent, error)
 }
 
-// StubClient is a no-op PSPClient for local development and tests.
+// StubClient is a development PSPClient. It simulates an asynchronous PSP:
+// collections return a pending reference (settlement arrives later via a
+// webhook), while split/refund/payout resolve synchronously. It performs NO
+// real signature verification — VerifyWebhook simply parses a JSON body — and
+// must never be used in production.
 type StubClient struct{}
 
 // NewStubClient returns a StubClient.
@@ -89,26 +94,38 @@ func NewStubClient() *StubClient { return &StubClient{} }
 
 var _ PSPClient = (*StubClient)(nil)
 
-func (s *StubClient) Collect(context.Context, CollectRequest) (*CollectResult, error) {
-	return nil, pkg.ErrNotImplemented
+func (s *StubClient) Collect(_ context.Context, req CollectRequest) (*CollectResult, error) {
+	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "pending"}, nil
 }
 
-func (s *StubClient) CollectBalance(context.Context, CollectRequest) (*CollectResult, error) {
-	return nil, pkg.ErrNotImplemented
+func (s *StubClient) CollectBalance(_ context.Context, req CollectRequest) (*CollectResult, error) {
+	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "pending"}, nil
 }
 
-func (s *StubClient) Split(context.Context, SplitRequest) (*OperationResult, error) {
-	return nil, pkg.ErrNotImplemented
+func (s *StubClient) Split(_ context.Context, req SplitRequest) (*OperationResult, error) {
+	return &OperationResult{PSPRef: "split_" + pkg.GenerateID(), Status: "succeeded"}, nil
 }
 
-func (s *StubClient) Refund(context.Context, RefundRequest) (*OperationResult, error) {
-	return nil, pkg.ErrNotImplemented
+func (s *StubClient) Refund(_ context.Context, req RefundRequest) (*OperationResult, error) {
+	return &OperationResult{PSPRef: "refund_" + pkg.GenerateID(), Status: "succeeded"}, nil
 }
 
-func (s *StubClient) Payout(context.Context, PayoutRequest) (*OperationResult, error) {
-	return nil, pkg.ErrNotImplemented
+func (s *StubClient) Payout(_ context.Context, req PayoutRequest) (*OperationResult, error) {
+	return &OperationResult{PSPRef: "payout_" + pkg.GenerateID(), Status: "succeeded"}, nil
 }
 
-func (s *StubClient) VerifyWebhook(context.Context, string, []byte) (*WebhookEvent, error) {
-	return nil, pkg.ErrNotImplemented
+// VerifyWebhook parses a development webhook body of the form
+// {"type":"deposit","psp_ref":"...","status":"succeeded","amount":1000}.
+// A real implementation would validate the provider's HMAC signature here.
+func (s *StubClient) VerifyWebhook(_ context.Context, _ string, body []byte) (*WebhookEvent, error) {
+	var ev struct {
+		Type   string  `json:"type"`
+		PSPRef string  `json:"psp_ref"`
+		Status string  `json:"status"`
+		Amount float64 `json:"amount"`
+	}
+	if err := json.Unmarshal(body, &ev); err != nil {
+		return nil, err
+	}
+	return &WebhookEvent{Type: ev.Type, PSPRef: ev.PSPRef, Status: ev.Status, Amount: ev.Amount}, nil
 }

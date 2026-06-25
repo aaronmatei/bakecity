@@ -77,6 +77,24 @@ func (r *Repository) PostTransaction(ctx context.Context, txn *Transaction, entr
 	return tx.Commit(ctx)
 }
 
+// TransactionExists reports whether a transaction of the given kind has already
+// been posted for an order. Used to make escrow postings idempotent so a
+// replayed payment webhook cannot double-credit.
+func (r *Repository) TransactionExists(ctx context.Context, orderID, kind string) (bool, error) {
+	if r.db == nil {
+		return false, pkg.ErrNotImplemented
+	}
+	if orderID == "" {
+		return false, nil
+	}
+	var exists bool
+	err := r.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM transactions WHERE order_id = $1 AND kind = $2)`,
+		orderID, kind,
+	).Scan(&exists)
+	return exists, err
+}
+
 // Balance returns an account's balance as sum(credit) - sum(debit).
 func (r *Repository) Balance(ctx context.Context, accountID string) (float64, error) {
 	if r.db == nil {

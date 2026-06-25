@@ -61,3 +61,12 @@ func (s *IdempotencyStore) Save(ctx context.Context, scope, key, result string) 
 	}
 	return nil
 }
+
+// Delete releases a reservation so it can be retried (e.g. after a processing
+// failure following a Save).
+func (s *IdempotencyStore) Delete(ctx context.Context, scope, key string) error {
+	if s == nil || s.rdb == nil || key == "" {
+		return nil
+	}
+	return s.rdb.Del(ctx, s.redisKey(scope, key)).Err()
+}

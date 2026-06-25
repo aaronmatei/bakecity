@@ -205,6 +205,42 @@ func round2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
 
+// MarkDepositPending moves an APPROVED order to DEPOSIT_PENDING when a deposit
+// collection is initiated. Idempotent if already pending.
+func (s *Service) MarkDepositPending(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusApproved, StatusDepositPending)
+}
+
+// MarkDepositPaid moves a DEPOSIT_PENDING order to DEPOSIT_PAID on confirmed
+// deposit settlement. Idempotent if already paid.
+func (s *Service) MarkDepositPaid(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusDepositPending, StatusDepositPaid)
+}
+
+// MarkCompleted moves a DELIVERED order to COMPLETED on confirmed balance
+// settlement. Idempotent if already completed.
+func (s *Service) MarkCompleted(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusDelivered, StatusCompleted)
+}
+
+// advance transitions an order from `from` to `to`; a no-op if already at `to`,
+// and a 409 from any other state.
+func (s *Service) advance(ctx context.Context, id, from, to string) error {
+	o, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	switch o.Status {
+	case to:
+		return nil // idempotent
+	case from:
+		return s.repo.UpdateStatus(ctx, id, to)
+	default:
+		return pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
+			"order in "+o.Status+" cannot move to "+to)
+	}
+}
+
 // authorize permits the order's customer, its baker, or an admin.
 func (s *Service) authorize(ctx context.Context, actor Actor, o *Order) error {
 	if actor.IsAdmin || o.CustomerID == actor.UserID {

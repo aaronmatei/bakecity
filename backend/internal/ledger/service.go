@@ -20,8 +20,12 @@ func NewService(repo *Repository) *Service {
 }
 
 // RecordDeposit books a held deposit: customer pays in, funds sit in the baker's
-// pending (escrow) account.
+// pending (escrow) account. Idempotent per order: a deposit already booked for
+// the order is a no-op.
 func (s *Service) RecordDeposit(ctx context.Context, orderID, customerID, bakerID string, amount float64) error {
+	if done, err := s.repo.TransactionExists(ctx, orderID, TxnDeposit); err != nil || done {
+		return err
+	}
 	cust, pend, err := s.customerAndPending(ctx, customerID, bakerID)
 	if err != nil {
 		return err
@@ -36,16 +40,25 @@ func (s *Service) RecordDeposit(ctx context.Context, orderID, customerID, bakerI
 // pending funds split into the baker's available balance (net) and the
 // platform's revenue (commission).
 func (s *Service) RecordBalanceAndRelease(ctx context.Context, orderID, customerID, bakerID string, balanceAmount, total, commission float64) error {
+	if done, err := s.repo.TransactionExists(ctx, orderID, TxnRelease); err != nil || done {
+		return err
+	}
 	cust, pend, err := s.customerAndPending(ctx, customerID, bakerID)
 	if err != nil {
 		return err
 	}
 	if balanceAmount > 0 {
-		if err := s.repo.PostTransaction(ctx, &Transaction{Kind: TxnBalance, OrderID: orderID}, []Entry{
-			{AccountID: cust, Debit: balanceAmount},
-			{AccountID: pend, Credit: balanceAmount},
-		}); err != nil {
+		balanceDone, err := s.repo.TransactionExists(ctx, orderID, TxnBalance)
+		if err != nil {
 			return err
+		}
+		if !balanceDone {
+			if err := s.repo.PostTransaction(ctx, &Transaction{Kind: TxnBalance, OrderID: orderID}, []Entry{
+				{AccountID: cust, Debit: balanceAmount},
+				{AccountID: pend, Credit: balanceAmount},
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	avail, err := s.repo.AccountID(ctx, AccountBakerAvailable, bakerID)

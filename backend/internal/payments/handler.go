@@ -1,8 +1,12 @@
 package payments
 
 import (
+	"context"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/corebalt/bakecity/internal/middleware"
 	"github.com/corebalt/bakecity/pkg"
 )
 
@@ -27,17 +31,47 @@ func (h *Handler) RegisterPublicRoutes(rg *gin.RouterGroup) {
 	rg.POST("/payments/webhook", h.Webhook)
 }
 
-// Deposit handles POST /orders/:id/payments/deposit (idempotent).
-func (h *Handler) Deposit(c *gin.Context) {
-	pkg.NotImplemented(c)
+func actorFrom(c *gin.Context) Actor {
+	return Actor{
+		UserID:  middleware.UserIDFromContext(c),
+		IsAdmin: middleware.RoleMaskFromContext(c)&middleware.RoleAdmin != 0,
+	}
 }
 
+// initiateFn is the shared shape of InitiateDeposit/InitiateBalance.
+type initiateFn func(ctx context.Context, actor Actor, orderID, idemKey, phone string) (*Payment, error)
+
+// Deposit handles POST /orders/:id/payments/deposit (idempotent).
+func (h *Handler) Deposit(c *gin.Context) { h.collect(c, h.svc.InitiateDeposit) }
+
 // Balance handles POST /orders/:id/payments/balance (idempotent).
-func (h *Handler) Balance(c *gin.Context) {
-	pkg.NotImplemented(c)
+func (h *Handler) Balance(c *gin.Context) { h.collect(c, h.svc.InitiateBalance) }
+
+func (h *Handler) collect(c *gin.Context, fn initiateFn) {
+	var req CollectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	payment, err := fn(c.Request.Context(), actorFrom(c), c.Param("id"), c.GetHeader("Idempotency-Key"), req.Phone)
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.Created(c, payment)
 }
 
 // Webhook handles POST /payments/webhook (idempotent, signature-verified).
 func (h *Handler) Webhook(c *gin.Context) {
-	pkg.NotImplemented(c)
+	body, err := c.GetRawData()
+	if err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, "could not read body")
+		return
+	}
+	status, err := h.svc.HandleWebhook(c.Request.Context(), c.GetHeader("X-PSP-Signature"), body)
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, gin.H{"status": status})
 }

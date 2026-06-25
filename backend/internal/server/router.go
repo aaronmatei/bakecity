@@ -90,13 +90,12 @@ func New(deps Deps) *gin.Engine {
 	mediaSvc := media.NewService(mediaRepo)
 	deliverySvc := delivery.NewService(deliveryRepo)
 	ledgerSvc := ledger.NewService(ledgerRepo)
-	paymentsSvc := payments.NewService(paymentsRepo, psp, idem)
+	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc)
 	disputesSvc := disputes.NewService(disputesRepo)
 	reviewsSvc := reviews.NewService(reviewsRepo)
 	notificationsSvc := notifications.NewService(notificationsRepo)
 	adminSvc := admin.NewService(adminRepo)
 	analyticsSvc := analytics.NewService(analyticsRepo)
-	_ = ledgerSvc // internal accounting module; not directly HTTP-mounted
 
 	// Handlers.
 	authH := auth.NewHandler(authSvc)
