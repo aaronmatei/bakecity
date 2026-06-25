@@ -20,8 +20,9 @@ type Message struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// SendMessageRequest is the payload for posting a message.
+// SendMessageRequest is the payload for posting a message. Either body or
+// media_id must be present (enforced by the service).
 type SendMessageRequest struct {
-	Body    string `json:"body" binding:"required"`
+	Body    string `json:"body"`
 	MediaID string `json:"media_id"`
 }

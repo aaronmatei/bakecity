@@ -85,7 +85,7 @@ func New(deps Deps) *gin.Engine {
 	searchSvc := search.NewService(searchRepo)
 	ordersSvc := orders.NewService(ordersRepo)
 	quotesSvc := quotes.NewService(quotesRepo, ordersSvc)
-	messagingSvc := messaging.NewService(messagingRepo)
+	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
 	productionSvc := production.NewService(productionRepo)
 	mediaSvc := media.NewService(mediaRepo)
 	deliverySvc := delivery.NewService(deliveryRepo)
