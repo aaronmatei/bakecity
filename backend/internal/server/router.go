@@ -123,6 +123,7 @@ func New(deps Deps) *gin.Engine {
 	public := api.Group("")
 	authH.RegisterRoutes(public)
 	searchH.RegisterRoutes(public)
+	catalogH.RegisterPublicRoutes(public)  // browse products/categories
 	paymentsH.RegisterPublicRoutes(public) // PSP webhook (signature-verified)
 
 	// Authenticated routes (JWT bearer).

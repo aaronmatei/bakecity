@@ -53,6 +53,15 @@ migrate-up:
 migrate-down:
 	migrate -path backend/migrations -database "$$DATABASE_URL" down
 
+# Grant the admin role bit (4) to an existing user by phone, e.g.
+#   make seed-admin PHONE=+254700000000
+# The user must log in again afterwards to obtain a token carrying the role.
+.PHONY: seed-admin
+seed-admin:
+	@test -n "$(PHONE)" || { echo "usage: make seed-admin PHONE=+2547..."; exit 1; }
+	docker compose exec -T postgres psql -U bakecity -d bakecity \
+		-c "UPDATE users SET role_mask = role_mask | 4 WHERE phone = '$(PHONE)';"
+
 # Frontend targets
 .PHONY: flutter-setup
 flutter-setup:
