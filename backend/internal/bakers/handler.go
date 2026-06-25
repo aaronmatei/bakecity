@@ -22,6 +22,7 @@ func NewHandler(svc *Service) *Handler {
 // RegisterRoutes wires the bakers routes.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/bakers", h.Create)
+	rg.GET("/bakers/:id", h.Get)
 	rg.PATCH("/bakers/:id", h.Update)
 	rg.POST("/bakers/:id/verify", h.Verify)
 	rg.GET("/bakers/:id/availability", h.GetAvailability)
@@ -49,6 +50,16 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	pkg.Created(c, profile)
+}
+
+// Get handles GET /bakers/:id.
+func (h *Handler) Get(c *gin.Context) {
+	profile, err := h.svc.Get(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, profile)
 }
 
 // Update handles PATCH /bakers/:id.

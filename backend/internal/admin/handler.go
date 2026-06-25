@@ -26,10 +26,24 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 // PendingBakers handles GET /admin/bakers/pending.
-func (h *Handler) PendingBakers(c *gin.Context) { pkg.NotImplemented(c) }
+func (h *Handler) PendingBakers(c *gin.Context) {
+	bakers, err := h.svc.PendingBakers(c.Request.Context())
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, gin.H{"bakers": bakers})
+}
 
 // ApproveBaker handles POST /admin/bakers/:id/approve.
-func (h *Handler) ApproveBaker(c *gin.Context) { pkg.NotImplemented(c) }
+func (h *Handler) ApproveBaker(c *gin.Context) {
+	baker, err := h.svc.ApproveBaker(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, baker)
+}
 
 // ListDisputes handles GET /admin/disputes.
 func (h *Handler) ListDisputes(c *gin.Context) { pkg.NotImplemented(c) }
