@@ -1,7 +1,8 @@
 /// Centralised definition of backend API paths.
 ///
 /// Paths are relative to [baseUrl]; parameterised paths are exposed as
-/// functions so call-sites stay type-safe.
+/// functions so call-sites stay type-safe. These mirror the Go backend's
+/// router (see backend/internal/server/router.go).
 class ApiEndpoints {
   const ApiEndpoints._();
 
@@ -11,20 +12,19 @@ class ApiEndpoints {
     defaultValue: 'http://localhost:8080/api/v1',
   );
 
-  // ---- Auth ----
+  /// WebSocket base, derived from [baseUrl] (http->ws, https->wss).
+  static String get wsBaseUrl => baseUrl.replaceFirst('http', 'ws');
+
+  // ---- Auth (no refresh/logout endpoints; logout is local) ----
   static const String register = '/auth/register';
   static const String login = '/auth/login';
-  static const String refresh = '/auth/refresh';
-  static const String logout = '/auth/logout';
   static const String me = '/me';
 
-  // ---- Onboarding / KYC (baker verification) ----
-  static const String bakerKyc = '/me/kyc';
-  static const String bakerKycDocuments = '/me/kyc/documents';
-
-  // ---- Bakers ----
+  // ---- Bakers & onboarding ----
   static const String bakers = '/bakers';
   static String baker(String id) => '/bakers/$id';
+  static String bakerVerify(String id) => '/bakers/$id/verify'; // KYC submission
+  static String bakerAvailability(String id) => '/bakers/$id/availability';
   static String bakerProducts(String id) => '/bakers/$id/products';
   static String bakerReviews(String id) => '/bakers/$id/reviews';
 
@@ -40,23 +40,21 @@ class ApiEndpoints {
   // ---- Orders ----
   static const String orders = '/orders';
   static String order(String id) => '/orders/$id';
+  static String orderCancel(String id) => '/orders/$id/cancel';
 
   // Quotes (per order)
   static String orderQuotes(String id) => '/orders/$id/quotes';
-  static String orderQuote(String orderId, String quoteId) =>
-      '/orders/$orderId/quotes/$quoteId';
   static String orderQuoteAccept(String orderId, String quoteId) =>
       '/orders/$orderId/quotes/$quoteId/accept';
 
   // Messaging (per order)
   static String orderMessages(String id) => '/orders/$id/messages';
 
-  // Production (per order)
+  // Production timeline (per order) — GET list + POST update share the path
   static String orderProduction(String id) => '/orders/$id/production';
-  static String orderProductionUpdate(String orderId, String stageId) =>
-      '/orders/$orderId/production/$stageId';
 
   // Delivery (per order)
+  static String orderDelivery(String id) => '/orders/$id/delivery';
   static String orderDeliveryDispatch(String id) =>
       '/orders/$id/delivery/dispatch';
   static String orderDeliveryConfirm(String id) =>
@@ -68,24 +66,37 @@ class ApiEndpoints {
   static String orderPaymentBalance(String id) =>
       '/orders/$id/payments/balance';
 
+  // Payouts (baker self-service)
+  static const String payouts = '/payouts';
+  static const String payoutsBalance = '/payouts/balance';
+
   // Disputes (per order)
   static String orderDisputes(String id) => '/orders/$id/disputes';
 
-  // ---- Media ----
+  // ---- Media (presigned uploads) ----
   static const String mediaPresign = '/media/presign';
+  static String mediaComplete(String id) => '/media/$id/complete';
 
   // ---- Reviews / ratings ----
   static const String reviews = '/reviews';
-  static String review(String id) => '/reviews/$id';
+  static String orderReview(String id) => '/orders/$id/review';
 
   // ---- Notifications ----
   static const String notifications = '/notifications';
-  static const String notificationDeviceTokens = '/notifications/device-tokens';
+  static const String notificationsUnreadCount = '/notifications/unread-count';
+  static const String notificationsReadAll = '/notifications/read-all';
+  static String notificationRead(String id) => '/notifications/$id/read';
+
+  /// WebSocket for realtime notifications. Auth is via the `token` query param
+  /// (browsers can't set the Authorization header on a WS handshake).
+  static String wsNotifications(String token) =>
+      '$wsBaseUrl/ws/notifications?token=$token';
 
   // ---- Admin ----
-  static const String adminUsers = '/admin/users';
-  static const String adminBakers = '/admin/bakers';
-  static const String adminBakerVerifications = '/admin/bakers/verifications';
+  static const String adminBakersPending = '/admin/bakers/pending';
+  static String adminBakerApprove(String id) => '/admin/bakers/$id/approve';
   static const String adminDisputes = '/admin/disputes';
-  static const String adminPayouts = '/admin/payouts';
+  static String adminDisputeResolve(String id) => '/admin/disputes/$id/resolve';
+  static String adminOrderRefund(String id) => '/admin/orders/$id/refund';
+  static const String analyticsOverview = '/analytics/overview';
 }

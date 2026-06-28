@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 
 import '../core/constants/api_endpoints.dart';
-import '../core/errors/app_exception.dart';
+import '../features/notifications/domain/notification.dart';
 import 'api_client.dart';
 
 /// Provides the [NotificationService].
@@ -13,11 +13,9 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   );
 });
 
-/// Wraps Firebase Cloud Messaging setup and device-token registration.
-///
-/// FCM is initialised lazily; the heavy lifting (requesting permissions,
-/// fetching the token, wiring foreground/background handlers) is stubbed so
-/// the app compiles without Firebase being configured yet.
+/// Reads the in-app notification feed and manages read state. Realtime delivery
+/// arrives over the WebSocket (see [WebSocketService]); push (FCM) is a separate
+/// transport that the backend fans out server-side.
 class NotificationService {
   NotificationService({
     required ApiClient api,
@@ -28,35 +26,49 @@ class NotificationService {
   final ApiClient _api;
   final Logger _logger;
 
-  /// Initialises messaging: request permission, get token, register handlers.
+  /// Lists the current user's notifications, newest first.
+  Future<List<AppNotification>> list({
+    bool unreadOnly = false,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final response = await _api.get<Map<String, dynamic>>(
+      ApiEndpoints.notifications,
+      queryParameters: {
+        if (unreadOnly) 'unread': 'true',
+        'limit': limit,
+        'offset': offset,
+      },
+    );
+    final items = (response.data?['notifications'] ?? const []) as List;
+    return items
+        .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Returns the count of unread notifications.
+  Future<int> unreadCount() async {
+    final response = await _api
+        .get<Map<String, dynamic>>(ApiEndpoints.notificationsUnreadCount);
+    return (response.data?['unread'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Marks a single notification read.
+  Future<void> markRead(String id) async {
+    await _api.post<void>(ApiEndpoints.notificationRead(id));
+  }
+
+  /// Marks all of the user's notifications read; returns the count updated.
+  Future<int> markAllRead() async {
+    final response = await _api
+        .post<Map<String, dynamic>>(ApiEndpoints.notificationsReadAll);
+    return (response.data?['marked_read'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Initialises push messaging (FCM). Stubbed until Firebase is configured;
+  /// the backend already fans push/SMS out server-side, and realtime in-app
+  /// delivery runs over the WebSocket.
   Future<void> init() async {
-    // TODO: Initialise Firebase + FirebaseMessaging, request permission,
-    // listen to onMessage / onMessageOpenedApp, and call registerDeviceToken
-    // with the FCM token (and on token refresh).
     _logger.d('NotificationService.init() — TODO: wire FirebaseMessaging');
-  }
-
-  /// Registers (or refreshes) the device's push token with the backend.
-  Future<void> registerDeviceToken(String token) async {
-    try {
-      await _api.post<void>(
-        ApiEndpoints.notificationDeviceTokens,
-        data: {'token': token, 'platform': 'flutter'},
-      );
-    } on AppException catch (e) {
-      _logger.w('Failed to register device token: ${e.message}');
-    }
-  }
-
-  /// Removes the device token (e.g. on logout).
-  Future<void> unregisterDeviceToken(String token) async {
-    try {
-      await _api.delete<void>(
-        ApiEndpoints.notificationDeviceTokens,
-        data: {'token': token},
-      );
-    } on AppException catch (e) {
-      _logger.w('Failed to unregister device token: ${e.message}');
-    }
   }
 }

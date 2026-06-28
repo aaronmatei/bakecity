@@ -12,27 +12,33 @@ final paymentServiceProvider = Provider<PaymentService>((ref) {
 /// Status of an initiated payment (M-Pesa STK push, etc.).
 enum PaymentInitStatus { pending, sent, failed }
 
-/// Result of initiating an escrow payment.
+/// Result of initiating an escrow payment. Mirrors the backend `Payment` row
+/// returned by the deposit/balance endpoints: a pending STK push whose final
+/// state arrives later via the PSP settlement webhook.
 class PaymentInitResult {
   const PaymentInitResult({
     required this.status,
-    this.checkoutRequestId,
-    this.message,
+    this.paymentId,
+    this.pspRef,
+    this.amount,
   });
 
   final PaymentInitStatus status;
-  final String? checkoutRequestId;
-  final String? message;
+  final String? paymentId;
+  final String? pspRef;
+  final double? amount;
 
   factory PaymentInitResult.fromJson(Map<String, dynamic> json) {
     return PaymentInitResult(
+      // Backend statuses: pending | succeeded | failed.
       status: switch (json['status'] as String?) {
-        'sent' => PaymentInitStatus.sent,
+        'succeeded' => PaymentInitStatus.sent,
         'failed' => PaymentInitStatus.failed,
         _ => PaymentInitStatus.pending,
       },
-      checkoutRequestId: json['checkout_request_id'] as String?,
-      message: json['message'] as String?,
+      paymentId: json['id'] as String?,
+      pspRef: json['psp_ref'] as String?,
+      amount: (json['amount'] as num?)?.toDouble(),
     );
   }
 }

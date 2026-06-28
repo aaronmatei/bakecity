@@ -27,19 +27,25 @@ class Product {
   final bool isAvailable;
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    // Backend product: { title, base_price (KES), active }. Map to the app's
+    // field names / cents, with fallbacks to the legacy keys.
+    final basePrice = (json['base_price'] as num?)?.toDouble();
     return Product(
       id: json['id'].toString(),
       bakerId: json['baker_id'].toString(),
-      name: json['name'] as String? ?? '',
+      name: json['title'] as String? ?? json['name'] as String? ?? '',
       description: json['description'] as String?,
       categoryId: json['category_id']?.toString(),
-      basePriceCents: (json['base_price_cents'] as num?)?.toInt() ?? 0,
+      basePriceCents: basePrice != null
+          ? (basePrice * 100).round()
+          : (json['base_price_cents'] as num?)?.toInt() ?? 0,
       imageUrls:
           (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
               const [],
       leadTimeDays: (json['lead_time_days'] as num?)?.toInt() ?? 1,
       isCustomizable: json['is_customizable'] as bool? ?? true,
-      isAvailable: json['is_available'] as bool? ?? true,
+      isAvailable:
+          json['active'] as bool? ?? json['is_available'] as bool? ?? true,
     );
   }
 

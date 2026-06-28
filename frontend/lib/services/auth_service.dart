@@ -73,14 +73,10 @@ class AuthService {
   }
 
   /// Clears local tokens; best-effort server-side logout.
+  /// Clears local tokens. The backend issues stateless JWTs and has no logout
+  /// endpoint, so sign-out is purely local (the token simply expires).
   Future<void> logout() async {
-    try {
-      await _api.post<void>(ApiEndpoints.logout);
-    } on AppException {
-      // Ignore — local sign-out should still proceed.
-    } finally {
-      await _tokenStorage.clear();
-    }
+    await _tokenStorage.clear();
   }
 
   Future<bool> hasSession() => _tokenStorage.hasToken;
@@ -100,6 +96,12 @@ class AuthService {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
     );
-    return session.user;
+    // The register/login response only carries user_id + role_mask; fetch the
+    // full profile now that the token is stored. Fall back to the minimal user.
+    try {
+      return await currentUser();
+    } on AppException {
+      return session.user;
+    }
   }
 }

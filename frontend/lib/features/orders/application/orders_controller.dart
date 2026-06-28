@@ -31,25 +31,32 @@ class OrdersController extends AsyncNotifier<List<Order>> {
     state = await AsyncValue.guard(_fetch);
   }
 
-  /// Creates a new order request. Returns the created order on success.
+  /// Creates a new order request (status QUOTE_REQUESTED). [eventDate] is sent
+  /// as YYYY-MM-DD; [specs] are free-form key/value attributes (flavor, tiers…).
+  /// Returns the created order on success.
   Future<Order?> createOrder({
     required String bakerId,
+    required DateTime eventDate,
     String? productId,
-    String? title,
-    String? description,
-    DateTime? eventDate,
-    List<String> referenceImageUrls = const [],
+    String? deliveryAddress,
+    double? lat,
+    double? lng,
+    Map<String, String> specs = const {},
   }) async {
     try {
       final response = await _api.post<Map<String, dynamic>>(
         ApiEndpoints.orders,
         data: {
           'baker_id': bakerId,
+          'event_date': _ymd(eventDate),
           if (productId != null) 'product_id': productId,
-          if (title != null) 'title': title,
-          if (description != null) 'description': description,
-          if (eventDate != null) 'event_date': eventDate.toIso8601String(),
-          'reference_image_urls': referenceImageUrls,
+          if (deliveryAddress != null) 'delivery_address': deliveryAddress,
+          if (lat != null) 'lat': lat,
+          if (lng != null) 'lng': lng,
+          if (specs.isNotEmpty)
+            'specs': [
+              for (final e in specs.entries) {'key': e.key, 'value': e.value},
+            ],
         },
       );
       final order = Order.fromJson(response.data!);
@@ -60,6 +67,12 @@ class OrdersController extends AsyncNotifier<List<Order>> {
       return null;
     }
   }
+
+  /// Formats a date as the backend's expected YYYY-MM-DD.
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 }
 
 /// Loads a single order by id.

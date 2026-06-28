@@ -53,11 +53,21 @@ class Quote {
   int get balanceCents => totalCents - depositCents;
 
   factory Quote.fromJson(Map<String, dynamic> json) {
+    // Backend quote: { amount (KES total), deposit_pct, status, version }.
+    // The app models money in cents and a deposit amount, so derive them.
+    final amount = (json['amount'] as num?)?.toDouble();
+    final depositPct = (json['deposit_pct'] as num?)?.toDouble() ?? 0;
+    final totalCents = amount != null
+        ? (amount * 100).round()
+        : (json['total_cents'] as num?)?.toInt() ?? 0;
+    final depositCents = amount != null
+        ? (amount * depositPct).round() // amount * (pct/100) * 100
+        : (json['deposit_cents'] as num?)?.toInt() ?? 0;
     return Quote(
       id: json['id'].toString(),
       orderId: json['order_id'].toString(),
-      totalCents: (json['total_cents'] as num?)?.toInt() ?? 0,
-      depositCents: (json['deposit_cents'] as num?)?.toInt() ?? 0,
+      totalCents: totalCents,
+      depositCents: depositCents,
       status: _parseStatus(json['status'] as String?),
       notes: json['notes'] as String?,
       leadTimeDays: (json['lead_time_days'] as num?)?.toInt(),
@@ -65,7 +75,7 @@ class Quote {
               ?.map((e) => QuoteLineItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
-      expiresAt: _date(json['expires_at']),
+      expiresAt: _date(json['expires_at'] ?? json['valid_until']),
       createdAt: _date(json['created_at']) ?? DateTime.now(),
     );
   }
@@ -84,10 +94,19 @@ class Quote {
       };
 
   static QuoteStatus _parseStatus(String? value) {
-    return QuoteStatus.values.firstWhere(
-      (s) => s.name == value,
-      orElse: () => QuoteStatus.pending,
-    );
+    switch (value) {
+      case 'accepted':
+        return QuoteStatus.accepted;
+      case 'expired':
+      case 'superseded': // a revised quote replaced this one
+        return QuoteStatus.expired;
+      case 'rejected':
+      case 'declined':
+        return QuoteStatus.declined;
+      case 'pending':
+      default:
+        return QuoteStatus.pending;
+    }
   }
 
   static DateTime? _date(Object? value) =>

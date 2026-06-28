@@ -28,12 +28,12 @@ class AuthUser {
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
-      id: json['id'].toString(),
+      id: (json['id'] ?? json['user_id']).toString(),
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String?,
       displayName: json['display_name'] as String? ?? json['name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
-      role: _parseRole(json['role'] as String?),
+      role: _roleFromJson(json),
       bakerVerified: json['baker_verified'] as bool? ?? false,
     );
   }
@@ -47,6 +47,21 @@ class AuthUser {
         'role': role.name,
         'baker_verified': bakerVerified,
       };
+
+  /// Resolves the role from either a `role_mask` bitmask (the backend's wire
+  /// format: 1=customer, 2=baker, 4=admin) or a legacy `role` string.
+  static UserRole _roleFromJson(Map<String, dynamic> json) {
+    final mask = json['role_mask'];
+    if (mask is int) return roleFromMask(mask);
+    return _parseRole(json['role'] as String?);
+  }
+
+  /// Maps the `users.role_mask` bitmask to a role (highest privilege wins).
+  static UserRole roleFromMask(int mask) {
+    if (mask & 4 != 0) return UserRole.admin;
+    if (mask & 2 != 0) return UserRole.baker;
+    return UserRole.customer;
+  }
 
   static UserRole _parseRole(String? value) {
     switch (value) {
@@ -90,11 +105,14 @@ class AuthSession {
   final AuthUser user;
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
+    // The backend returns a flat AuthResponse: {user_id, token, role_mask,
+    // expires_at} — no nested user and no refresh token. Build a minimal user
+    // from it; the full profile is fetched separately from GET /me.
     final userJson = (json['user'] ?? json['data']) as Map<String, dynamic>?;
     return AuthSession(
-      accessToken: (json['access_token'] ?? json['token']) as String? ?? '',
+      accessToken: (json['token'] ?? json['access_token']) as String? ?? '',
       refreshToken: json['refresh_token'] as String?,
-      user: AuthUser.fromJson(userJson ?? const {}),
+      user: AuthUser.fromJson(userJson ?? json),
     );
   }
 }

@@ -49,9 +49,14 @@ class Order {
           const [],
       eventDate: _parseDate(json['event_date']),
       deliveryAddress: json['delivery_address'] as String?,
-      totalCents: (json['total_cents'] as num?)?.toInt(),
-      depositCents: (json['deposit_cents'] as num?)?.toInt(),
-      balanceCents: (json['balance_cents'] as num?)?.toInt(),
+      // Backend sends decimal KES amounts (total_amount, …); the app models
+      // money in minor units (cents), so convert here.
+      totalCents: _cents(json['total_amount']) ??
+          (json['total_cents'] as num?)?.toInt(),
+      depositCents: _cents(json['deposit_amount']) ??
+          (json['deposit_cents'] as num?)?.toInt(),
+      balanceCents: _cents(json['balance_amount']) ??
+          (json['balance_cents'] as num?)?.toInt(),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
     );
   }
@@ -77,10 +82,38 @@ class Order {
     if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
     return null;
   }
+
+  /// Converts a decimal KES amount to integer cents, or null if absent.
+  static int? _cents(Object? value) =>
+      value is num ? (value * 100).round() : null;
 }
+
+/// Maps the backend's order statuses (UPPER_SNAKE, see the Go state machine) to
+/// the app's [OrderStatus] enum. The backend has a few states the enum folds
+/// together (e.g. NEGOTIATING -> pendingQuote, REFUNDED -> cancelled).
+const Map<String, OrderStatus> _backendStatus = {
+  'DRAFT': OrderStatus.draft,
+  'QUOTE_REQUESTED': OrderStatus.pendingQuote,
+  'NEGOTIATING': OrderStatus.pendingQuote,
+  'QUOTED': OrderStatus.quoted,
+  'APPROVED': OrderStatus.accepted,
+  'DEPOSIT_PENDING': OrderStatus.accepted,
+  'DEPOSIT_PAID': OrderStatus.depositPaid,
+  'IN_PRODUCTION': OrderStatus.inProduction,
+  'READY': OrderStatus.ready,
+  'OUT_FOR_DELIVERY': OrderStatus.dispatched,
+  'DELIVERED': OrderStatus.delivered,
+  'COMPLETED': OrderStatus.completed,
+  'CANCELLED': OrderStatus.cancelled,
+  'DISPUTED': OrderStatus.disputed,
+  'REFUNDED': OrderStatus.cancelled,
+};
 
 /// Parses a server status string into an [OrderStatus], defaulting to draft.
 OrderStatus parseOrderStatus(String? value) {
+  if (value == null) return OrderStatus.draft;
+  final mapped = _backendStatus[value.toUpperCase()];
+  if (mapped != null) return mapped;
   for (final status in OrderStatus.values) {
     if (status.name == value || _snake(status.name) == value) return status;
   }
