@@ -6,16 +6,22 @@ import (
 	"log"
 )
 
+// Broadcaster delivers a raw message to a user's live connections (WebSocket).
+type Broadcaster interface {
+	Broadcast(ctx context.Context, userID string, message []byte)
+}
+
 // Service implements notifications business logic: persisting an in-app feed and
-// fanning out push/SMS deliveries for domain events.
+// fanning out realtime (WebSocket), push, and SMS deliveries for domain events.
 type Service struct {
 	repo   *Repository
 	sender Sender
+	hub    Broadcaster
 }
 
-// NewService constructs a Service.
-func NewService(repo *Repository, sender Sender) *Service {
-	return &Service{repo: repo, sender: sender}
+// NewService constructs a Service. hub may be nil (no realtime transport).
+func NewService(repo *Repository, sender Sender, hub Broadcaster) *Service {
+	return &Service{repo: repo, sender: sender, hub: hub}
 }
 
 // Notify records an in-app notification for a user and best-effort dispatches it
@@ -30,8 +36,18 @@ func (s *Service) Notify(ctx context.Context, userID, notifType string, payload 
 	if err != nil {
 		data = []byte("{}")
 	}
-	if _, err := s.repo.Create(ctx, userID, ChannelInApp, notifType, data); err != nil {
+	n, err := s.repo.Create(ctx, userID, ChannelInApp, notifType, data)
+	if err != nil {
 		log.Printf("notify: persist %s for %s failed: %v", notifType, userID, err)
+		// Still broadcast a transient copy so a live client isn't starved.
+		n = &Notification{UserID: userID, Channel: ChannelInApp, Type: notifType, Payload: data}
+	}
+
+	// Realtime: push the notification to the user's open WebSocket connections.
+	if s.hub != nil {
+		if msg, mErr := json.Marshal(n); mErr == nil {
+			s.hub.Broadcast(ctx, userID, msg)
+		}
 	}
 
 	title, body := render(notifType, payload)

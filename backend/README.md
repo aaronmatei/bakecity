@@ -59,19 +59,22 @@ Beyond the phases, the cross-cutting pieces from the spec are in place:
   via the PSP, books the ledger debit (`baker_available → payouts`), and records
   it; `GET /payouts/balance` shows available / held / paid-out.
 - **Notifications & events** (§10): a durable in-app feed (`/notifications`) plus
-  best-effort push/SMS fan-out, emitted from the order lifecycle (quote, deposit,
-  production, delivery, completion, dispute, payout). Money-critical events also
-  go out over SMS.
+  realtime WebSocket push and best-effort push/SMS fan-out, emitted from the
+  order lifecycle (quote, deposit, production, delivery, completion, dispute,
+  payout). Money-critical events also go out over SMS.
+- **Realtime transport** (§2, §10): `GET /ws/notifications?token=<jwt>` upgrades
+  to a WebSocket; a per-user connection hub fans events out, using Redis pub/sub
+  so an event raised on any instance reaches that user's connections everywhere
+  (in-process delivery when Redis is absent).
 
 Money movements are double-entry through `internal/ledger`; payment, webhook, and
 payout paths are idempotent (Redis reservation + per-order ledger guards). The
-PSP, S3, and FCM/SMS flows run against stub clients in dev — point
-`DATABASE_URL` at a migrated database and run `go test ./...` to exercise the
-DB-gated integration tests (e.g. the full escrow-to-payout lifecycle).
+PSP, S3, and FCM/SMS clients are stub simulators in dev — point `DATABASE_URL`
+at a migrated database and run `go test ./...` to exercise the DB-gated
+integration tests (e.g. the full escrow-to-payout lifecycle).
 
-Not yet built: live WebSocket transport for realtime push (the in-app feed is
-the durable channel), and the per-stage cancellation refund percentages from §7
-(refund execution is a manual admin action returning the held deposit).
+Not yet built: the per-stage cancellation refund percentages from §7 (refund
+execution is currently a manual admin action returning the held deposit).
 
 ## Getting Started
 

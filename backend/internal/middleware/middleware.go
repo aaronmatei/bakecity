@@ -79,24 +79,37 @@ func Auth(secret string) gin.HandlerFunc {
 			pkg.Error(c, http.StatusUnauthorized, pkg.ErrCodeUnauthorized, "missing bearer token")
 			return
 		}
-		tokenStr := strings.TrimPrefix(header, "Bearer ")
-
-		claims := &AuthClaims{}
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(secret), nil
-		})
-		if err != nil || !token.Valid {
+		userID, roleMask, err := ParseToken(secret, strings.TrimPrefix(header, "Bearer "))
+		if err != nil {
 			pkg.Error(c, http.StatusUnauthorized, pkg.ErrCodeUnauthorized, "invalid token")
 			return
 		}
 
-		c.Set(ContextUserID, claims.Subject)
-		c.Set(ContextRoleMask, claims.RoleMask)
+		c.Set(ContextUserID, userID)
+		c.Set(ContextRoleMask, roleMask)
 		c.Next()
 	}
+}
+
+// ParseToken validates a signed HS256 JWT and returns its subject (user id) and
+// role mask. It is shared by the Auth middleware and the WebSocket handler
+// (which authenticates via a query-param token, since browsers can't set the
+// Authorization header on a WebSocket handshake).
+func ParseToken(secret, tokenStr string) (userID string, roleMask int, err error) {
+	claims := &AuthClaims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	if !token.Valid {
+		return "", 0, jwt.ErrTokenInvalidClaims
+	}
+	return claims.Subject, claims.RoleMask, nil
 }
 
 // RequireRole aborts unless the authenticated user has at least one of the

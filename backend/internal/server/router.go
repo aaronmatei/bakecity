@@ -58,6 +58,7 @@ func New(deps Deps) *gin.Engine {
 	psp := pspclient.NewStubClient()
 	presigner := storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
 	sender := notifications.NewStubSender()
+	hub := notifications.NewHub(deps.Redis)
 	idem := pkg.NewIdempotencyStore(deps.Redis, 0)
 
 	// Repositories.
@@ -86,7 +87,7 @@ func New(deps Deps) *gin.Engine {
 	bakersSvc := bakers.NewService(bakersRepo)
 	catalogSvc := catalog.NewService(catalogRepo)
 	searchSvc := search.NewService(searchRepo)
-	notificationsSvc := notifications.NewService(notificationsRepo, sender)
+	notificationsSvc := notifications.NewService(notificationsRepo, sender, hub)
 	ordersSvc := orders.NewService(ordersRepo)
 	quotesSvc := quotes.NewService(quotesRepo, ordersSvc, notificationsSvc)
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
@@ -115,7 +116,7 @@ func New(deps Deps) *gin.Engine {
 	paymentsH := payments.NewHandler(paymentsSvc)
 	disputesH := disputes.NewHandler(disputesSvc)
 	reviewsH := reviews.NewHandler(reviewsSvc)
-	notificationsH := notifications.NewHandler(notificationsSvc)
+	notificationsH := notifications.NewHandler(notificationsSvc, hub, deps.Cfg.JWTSecret)
 	adminH := admin.NewHandler(adminSvc)
 	analyticsH := analytics.NewHandler(analyticsSvc)
 
@@ -125,8 +126,9 @@ func New(deps Deps) *gin.Engine {
 	public := api.Group("")
 	authH.RegisterRoutes(public)
 	searchH.RegisterRoutes(public)
-	catalogH.RegisterPublicRoutes(public)  // browse products/categories
-	paymentsH.RegisterPublicRoutes(public) // PSP webhook (signature-verified)
+	catalogH.RegisterPublicRoutes(public)       // browse products/categories
+	paymentsH.RegisterPublicRoutes(public)      // PSP webhook (signature-verified)
+	notificationsH.RegisterPublicRoutes(public) // WebSocket (token in query param)
 
 	// Authenticated routes (JWT bearer).
 	authed := api.Group("")

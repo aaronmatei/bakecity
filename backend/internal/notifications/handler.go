@@ -1,7 +1,9 @@
 package notifications
 
 import (
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,20 +18,46 @@ const (
 
 // Handler exposes notifications HTTP endpoints.
 type Handler struct {
-	svc *Service
+	svc       *Service
+	hub       *Hub
+	jwtSecret string
 }
 
 // NewHandler constructs a Handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, hub *Hub, jwtSecret string) *Handler {
+	return &Handler{svc: svc, hub: hub, jwtSecret: jwtSecret}
 }
 
-// RegisterRoutes wires the notifications routes (authed group).
+// RegisterRoutes wires the notifications REST routes (authed group).
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/notifications", h.List)
 	rg.GET("/notifications/unread-count", h.UnreadCount)
 	rg.POST("/notifications/read-all", h.MarkAllRead)
 	rg.POST("/notifications/:id/read", h.MarkRead)
+}
+
+// RegisterPublicRoutes wires the WebSocket endpoint. It is mounted without the
+// Auth middleware because a browser cannot set the Authorization header on a
+// WebSocket handshake; the token is taken from the `token` query param (or a
+// bearer header for non-browser clients) and verified here.
+func (h *Handler) RegisterPublicRoutes(rg *gin.RouterGroup) {
+	rg.GET("/ws/notifications", h.ServeWS)
+}
+
+// ServeWS authenticates the request and upgrades it to a WebSocket that streams
+// the user's notifications in realtime.
+func (h *Handler) ServeWS(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		token = strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	}
+	userID, _, err := middleware.ParseToken(h.jwtSecret, token)
+	if err != nil || userID == "" {
+		pkg.Error(c, http.StatusUnauthorized, pkg.ErrCodeUnauthorized, "invalid token")
+		return
+	}
+	// On success the response is hijacked; nothing more to write here.
+	_ = h.hub.Serve(c.Writer, c.Request, userID)
 }
 
 // List handles GET /notifications (?unread=true&limit&offset).

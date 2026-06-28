@@ -80,12 +80,11 @@ endpoints.
 7. ✅ Delivery with proof-of-delivery gating final payment
 8. ✅ Baker payouts (available-balance disbursement) and ledger balances
 9. ✅ Disputes, admin resolution, ratings, and analytics
-10. ✅ Notifications: in-app feed + push/SMS fan-out on lifecycle events
+10. ✅ Notifications: in-app feed + realtime WebSocket + push/SMS fan-out on lifecycle events
 
 > External integrations (PSP, S3, FCM push, Africa's Talking SMS) currently run
 > as stub simulators for local development; swap in real providers before
-> production. Live WebSocket transport is not yet wired (the in-app feed is the
-> durable channel).
+> production. Realtime delivery uses a WebSocket hub with Redis pub/sub fan-out.
 
 ## Stack
 
