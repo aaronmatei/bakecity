@@ -29,7 +29,7 @@ class Dispute {
     return Dispute(
       id: json['id'].toString(),
       orderId: json['order_id'].toString(),
-      raisedById: json['raised_by_id'].toString(),
+      raisedById: (json['raised_by'] ?? json['raised_by_id']).toString(),
       reason: json['reason'] as String? ?? '',
       description: json['description'] as String?,
       evidenceUrls: (json['evidence_urls'] as List?)
@@ -37,7 +37,8 @@ class Dispute {
               .toList() ??
           const [],
       status: _parseStatus(json['status'] as String?),
-      resolutionNote: json['resolution_note'] as String?,
+      resolutionNote:
+          json['resolution'] as String? ?? json['resolution_note'] as String?,
       createdAt: _date(json['created_at']) ?? DateTime.now(),
     );
   }

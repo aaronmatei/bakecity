@@ -20,29 +20,31 @@ final orderDisputesProvider =
 
 /// Raises disputes against an order.
 final disputesControllerProvider = Provider<DisputesController>((ref) {
-  return DisputesController(ref.read(apiClientProvider));
+  return DisputesController(ref);
 });
 
 class DisputesController {
-  DisputesController(this._api);
+  DisputesController(this._ref);
 
-  final ApiClient _api;
+  final Ref _ref;
 
-  /// Opens a new dispute on an order.
+  /// Opens a new dispute on an order, then refreshes the order's dispute list.
+  /// [description], if given, is folded into the reason (the backend takes a
+  /// single free-text reason).
   Future<Dispute> raiseDispute({
     required String orderId,
     required String reason,
     String? description,
-    List<String> evidenceUrls = const [],
   }) async {
-    final response = await _api.post<Map<String, dynamic>>(
+    final fullReason = (description != null && description.isNotEmpty)
+        ? '$reason\n\n$description'
+        : reason;
+    final response =
+        await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
       ApiEndpoints.orderDisputes(orderId),
-      data: {
-        'reason': reason,
-        if (description != null) 'description': description,
-        'evidence_urls': evidenceUrls,
-      },
+      data: {'reason': fullReason},
     );
+    _ref.invalidate(orderDisputesProvider(orderId));
     return Dispute.fromJson(response.data!);
   }
 }
