@@ -36,6 +36,7 @@ const (
 	TypeDisputeRaised    = "dispute_raised"
 	TypeDisputeResolved  = "dispute_resolved"
 	TypePayoutSent       = "payout_sent"
+	TypeOrderCancelled   = "order_cancelled"
 )
 
 // moneyCritical types are also pushed over SMS (high-trust in Kenya), per §10:

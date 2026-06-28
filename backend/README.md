@@ -66,6 +66,13 @@ Beyond the phases, the cross-cutting pieces from the spec are in place:
   to a WebSocket; a per-user connection hub fans events out, using Redis pub/sub
   so an event raised on any instance reaches that user's connections everywhere
   (in-process delivery when Redis is absent).
+- **Cancellation refund matrix** (§7): `POST /orders/:id/cancel` applies the
+  graduated split to the held deposit and settles it on the ledger. A customer
+  may cancel through IN_PRODUCTION (deposit minus a processing fee before
+  production; a 50/50 forfeit once in production, baker's share net of
+  commission); once READY they must dispute. A baker (can't fulfil) or admin may
+  cancel any pre-DELIVERED stage with a full refund. Percentages are platform
+  defaults today; per-baker overrides are a future extension.
 
 Money movements are double-entry through `internal/ledger`; payment, webhook, and
 payout paths are idempotent (Redis reservation + per-order ledger guards). The
@@ -73,8 +80,9 @@ PSP, S3, and FCM/SMS clients are stub simulators in dev — point `DATABASE_URL`
 at a migrated database and run `go test ./...` to exercise the DB-gated
 integration tests (e.g. the full escrow-to-payout lifecycle).
 
-Not yet built: the per-stage cancellation refund percentages from §7 (refund
-execution is currently a manual admin action returning the held deposit).
+The backend now covers the architecture spec end to end. Remaining work is
+operational hardening (real PSP/S3/FCM/SMS providers, per-baker refund config)
+and wiring the Flutter frontend to the newer endpoints.
 
 ## Getting Started
 

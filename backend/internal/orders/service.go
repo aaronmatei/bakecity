@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/corebalt/bakecity/internal/ledger"
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/pkg"
 )
 
@@ -18,13 +20,15 @@ type Actor struct {
 // Service implements order business logic, including scheduling guards and the
 // state-machine transitions.
 type Service struct {
-	repo *Repository
-	now  func() time.Time
+	repo   *Repository
+	ledger *ledger.Service
+	notify *notifications.Service
+	now    func() time.Time
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo, now: time.Now}
+func NewService(repo *Repository, ledgerSvc *ledger.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, ledger: ledgerSvc, notify: notifySvc, now: time.Now}
 }
 
 // Create validates fulfillment and creates an order in QUOTE_REQUESTED.
@@ -88,24 +92,111 @@ func (s *Service) List(ctx context.Context, actor Actor, f ListFilter) ([]Order,
 	return s.repo.List(ctx, actor.UserID, bakerID, f)
 }
 
-// Cancel moves a pre-COMPLETED order to CANCELLED. Either participant or an
-// admin may cancel.
+// Cancellation refund policy defaults (architecture §7). These are platform-wide
+// defaults; making them per-baker is a future extension.
+const (
+	cancelProcessingFeePct = 0.10 // platform fee when a customer cancels after the deposit is paid
+	inProductionForfeitPct = 0.50 // deposit share the customer forfeits once production has started
+)
+
+// CancelSettlement is how a cancelled order's held deposit is divided.
+type CancelSettlement struct {
+	ToCustomer  float64 `json:"to_customer"`
+	ToBaker     float64 `json:"to_baker"`
+	ToPlatform  float64 `json:"to_platform"`
+	FinalStatus string  `json:"-"`
+}
+
+// cancellationSettlement applies the §7 refund matrix. deposit is the escrow
+// held (0 before DEPOSIT_PAID); role is "customer", "baker", or "admin". Legs
+// always sum to the held amount.
+func cancellationSettlement(status, role string, deposit float64) CancelSettlement {
+	var held float64
+	switch status {
+	case StatusDepositPaid, StatusInProduction, StatusReady, StatusOutForDelivery:
+		held = deposit
+	}
+	if held <= 0 {
+		return CancelSettlement{FinalStatus: StatusCancelled}
+	}
+	// Baker (can't fulfill) or admin cancellation makes the customer whole.
+	if role != "customer" {
+		return CancelSettlement{ToCustomer: round2(held), FinalStatus: StatusRefunded}
+	}
+	// Customer cancellation.
+	if status == StatusInProduction {
+		gross := round2(held * inProductionForfeitPct) // baker keeps this slice
+		commission := round2(gross * CommissionRate)
+		return CancelSettlement{
+			ToCustomer:  round2(held - gross),
+			ToBaker:     round2(gross - commission),
+			ToPlatform:  commission,
+			FinalStatus: StatusRefunded,
+		}
+	}
+	// DEPOSIT_PAID, before production: refund minus a processing fee.
+	fee := round2(held * cancelProcessingFeePct)
+	return CancelSettlement{
+		ToCustomer:  round2(held - fee),
+		ToPlatform:  fee,
+		FinalStatus: StatusRefunded,
+	}
+}
+
+// Cancel cancels a pre-DELIVERED order, applying the §7 refund matrix to any
+// held deposit. A customer may cancel only through IN_PRODUCTION; once an order
+// is READY or later the customer must raise a dispute. A baker (who can't
+// fulfill) or an admin may cancel at any pre-DELIVERED stage with a full refund.
 func (s *Service) Cancel(ctx context.Context, actor Actor, id string) (*Order, error) {
 	o, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorize(ctx, actor, o); err != nil {
-		return nil, err
+	role := s.roleOf(ctx, actor, o)
+	if role == "" {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "not a participant in this order")
 	}
 	if !CanTransition(o.Status, StatusCancelled) {
 		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "order cannot be cancelled from "+o.Status)
 	}
-	if err := s.repo.UpdateStatus(ctx, id, StatusCancelled); err != nil {
+	if role == "customer" && (o.Status == StatusReady || o.Status == StatusOutForDelivery) {
+		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
+			"order can no longer be cancelled by the customer; please raise a dispute")
+	}
+
+	st := cancellationSettlement(o.Status, role, o.DepositAmount)
+	if st.ToCustomer > 0 || st.ToBaker > 0 || st.ToPlatform > 0 {
+		if err := s.ledger.SettleCancellation(ctx, o.ID, o.CustomerID, o.BakerID,
+			st.ToCustomer, st.ToBaker, st.ToPlatform); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.repo.UpdateStatus(ctx, id, st.FinalStatus); err != nil {
 		return nil, err
 	}
-	o.Status = StatusCancelled
+	o.Status = st.FinalStatus
+
+	payload := map[string]any{"order_id": o.ID, "refund": st.ToCustomer, "cancelled_by": role}
+	s.notify.Notify(ctx, o.CustomerID, notifications.TypeOrderCancelled, payload)
+	if bakerUserID, err := s.BakerUserID(ctx, o.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeOrderCancelled, payload)
+	}
 	return o, nil
+}
+
+// roleOf classifies the actor's relationship to an order: "admin", "customer",
+// "baker", or "" if not a participant.
+func (s *Service) roleOf(ctx context.Context, actor Actor, o *Order) string {
+	if actor.IsAdmin {
+		return "admin"
+	}
+	if o.CustomerID == actor.UserID {
+		return "customer"
+	}
+	if sched, err := s.repo.BakerScheduling(ctx, o.BakerID); err == nil && sched.UserID == actor.UserID {
+		return "baker"
+	}
+	return ""
 }
 
 // checkFulfillment enforces the scheduling guards: lead time, blackout dates,

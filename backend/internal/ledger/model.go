@@ -14,11 +14,12 @@ const (
 
 // Transaction kinds.
 const (
-	TxnDeposit = "deposit"
-	TxnBalance = "balance"
-	TxnRelease = "release"
-	TxnRefund  = "refund"
-	TxnPayout  = "payout"
+	TxnDeposit      = "deposit"
+	TxnBalance      = "balance"
+	TxnRelease      = "release"
+	TxnRefund       = "refund"
+	TxnPayout       = "payout"
+	TxnCancellation = "cancellation"
 )
 
 // platformOwner is the synthetic owner id for singleton platform accounts

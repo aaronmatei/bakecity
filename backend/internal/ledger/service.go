@@ -161,6 +161,44 @@ func (s *Service) RecordPayout(ctx context.Context, bakerID string, amount float
 	})
 }
 
+// SettleCancellation books a cancelled order's held escrow: the deposit is
+// split across the customer (refund), the baker (forfeited share, net of
+// commission), and the platform (processing fee / commission). Any leg may be
+// zero. The single transaction debits pending by exactly the sum of the credits,
+// so it always balances. Idempotent per order via the TxnCancellation guard.
+func (s *Service) SettleCancellation(ctx context.Context, orderID, customerID, bakerID string, toCustomer, toBaker, toPlatform float64) error {
+	if done, err := s.repo.TransactionExists(ctx, orderID, TxnCancellation); err != nil || done {
+		return err
+	}
+	total := toCustomer + toBaker + toPlatform
+	if total <= 0 {
+		return nil
+	}
+	cust, pend, err := s.customerAndPending(ctx, customerID, bakerID)
+	if err != nil {
+		return err
+	}
+	entries := []Entry{{AccountID: pend, Debit: total}}
+	if toCustomer > 0 {
+		entries = append(entries, Entry{AccountID: cust, Credit: toCustomer})
+	}
+	if toBaker > 0 {
+		avail, err := s.repo.AccountID(ctx, AccountBakerAvailable, bakerID)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, Entry{AccountID: avail, Credit: toBaker})
+	}
+	if toPlatform > 0 {
+		rev, err := s.repo.AccountID(ctx, AccountPlatformRevenue, "")
+		if err != nil {
+			return err
+		}
+		entries = append(entries, Entry{AccountID: rev, Credit: toPlatform})
+	}
+	return s.repo.PostTransaction(ctx, &Transaction{Kind: TxnCancellation, OrderID: orderID}, entries)
+}
+
 // BakerAvailableBalance is the amount a baker can be paid out.
 func (s *Service) BakerAvailableBalance(ctx context.Context, bakerID string) (float64, error) {
 	return s.repo.BalanceByKindOwner(ctx, AccountBakerAvailable, bakerID)

@@ -109,6 +109,8 @@ func render(notifType string, _ map[string]any) (title, body string) {
 		return "Dispute resolved", "A dispute on your order has been resolved."
 	case TypePayoutSent:
 		return "Payout sent", "Your available balance has been paid out."
+	case TypeOrderCancelled:
+		return "Order cancelled", "An order was cancelled; any refund due has been processed."
 	default:
 		return "Notification", "You have a new notification."
 	}
