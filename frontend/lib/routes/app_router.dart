@@ -6,6 +6,7 @@ import '../core/constants/app_constants.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
+import '../features/admin/presentation/admin_dashboard_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
@@ -92,6 +93,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BakerHomeScreen(),
       ),
       GoRoute(
+        path: AppRoutes.adminHome,
+        name: AppRoutes.adminHomeName,
+        builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.discovery,
         name: AppRoutes.discoveryName,
         builder: (context, state) => const DiscoveryScreen(),
@@ -136,6 +142,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
 String _homeFor(AuthState auth) {
   final role = auth.user?.role;
+  if (role == UserRole.admin) return AppRoutes.adminHome;
   if (role == UserRole.baker) {
     // Route unverified bakers through onboarding first.
     if (auth.user?.bakerVerified == false) return AppRoutes.onboarding;

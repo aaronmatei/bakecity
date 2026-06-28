@@ -10,6 +10,7 @@ class AppRoutes {
 
   static const String customerHome = '/home';
   static const String bakerHome = '/baker';
+  static const String adminHome = '/admin';
   static const String discovery = '/discovery';
   static const String notifications = '/notifications';
   static const String payouts = '/payouts';
@@ -27,6 +28,7 @@ class AppRoutes {
   static const String onboardingName = 'onboarding';
   static const String customerHomeName = 'customerHome';
   static const String bakerHomeName = 'bakerHome';
+  static const String adminHomeName = 'adminHome';
   static const String discoveryName = 'discovery';
   static const String notificationsName = 'notifications';
   static const String payoutsName = 'payouts';
