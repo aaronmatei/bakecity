@@ -29,10 +29,10 @@ class Review {
       id: json['id'].toString(),
       orderId: json['order_id'].toString(),
       bakerId: json['baker_id'].toString(),
-      authorId: json['author_id'].toString(),
+      authorId: (json['customer_id'] ?? json['author_id']).toString(),
       authorName: json['author_name'] as String?,
       rating: (json['rating'] as num?)?.toInt() ?? 0,
-      comment: json['comment'] as String?,
+      comment: json['body'] as String? ?? json['comment'] as String?,
       imageUrls:
           (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
               const [],

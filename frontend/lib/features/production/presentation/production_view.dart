@@ -7,6 +7,7 @@ import '../../../core/helpers/formatters.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
+import '../../../services/upload_service.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
 import '../application/production_controller.dart';
@@ -27,6 +28,8 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
   final _notesController = TextEditingController();
   double _progress = 0;
   bool _submitting = false;
+  bool _uploading = false;
+  String? _mediaId;
 
   @override
   void dispose() {
@@ -49,15 +52,38 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
             stage: stage,
             progressPct: _progress.round(),
             notes: _notesController.text.trim(),
+            mediaId: _mediaId,
           );
       _stageController.clear();
       _notesController.clear();
-      setState(() => _progress = 0);
+      setState(() {
+        _progress = 0;
+        _mediaId = null;
+      });
       messenger.showSnackBar(const SnackBar(content: Text('Update posted.')));
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _attachPhoto() async {
+    setState(() => _uploading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final mediaId = await ref.read(uploadServiceProvider).pickAndUpload(
+            kind: MediaKind.production,
+            orderId: widget.orderId,
+          );
+      if (mediaId != null) {
+        setState(() => _mediaId = mediaId);
+        messenger.showSnackBar(const SnackBar(content: Text('Photo attached.')));
+      }
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -146,6 +172,20 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                 ),
               ],
             ),
+            OutlinedButton.icon(
+              onPressed: _uploading || _submitting ? null : _attachPhoto,
+              icon: _uploading
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(_mediaId == null
+                      ? Icons.add_a_photo_outlined
+                      : Icons.check_circle_outline),
+              label: Text(_mediaId == null ? 'Attach photo' : 'Photo attached'),
+            ),
+            const SizedBox(height: 8),
             PrimaryButton(
               label: 'Post update',
               icon: Icons.add_outlined,

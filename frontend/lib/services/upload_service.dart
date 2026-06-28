@@ -13,40 +13,41 @@ final uploadServiceProvider = Provider<UploadService>((ref) {
   return UploadService(ref.watch(apiClientProvider));
 });
 
-/// Result of a presign request.
+/// Media kinds accepted by the backend (the upload's purpose).
+class MediaKind {
+  const MediaKind._();
+  static const String reference = 'reference';
+  static const String production = 'production';
+  static const String deliveryProof = 'delivery_proof';
+  static const String product = 'product';
+}
+
+/// Presigned upload target returned by POST /media/presign.
 class PresignedUpload {
   const PresignedUpload({
     required this.uploadUrl,
-    required this.publicUrl,
-    this.fields = const {},
-    this.method = 'PUT',
+    required this.s3Key,
+    required this.mediaId,
   });
 
-  /// The URL to PUT/POST the bytes to (e.g. an S3 signed URL).
+  /// The URL to PUT the bytes to (S3 signed URL).
   final String uploadUrl;
+  final String s3Key;
 
-  /// The URL the asset will be reachable at after upload.
-  final String publicUrl;
-
-  /// Extra form fields required for a presigned POST policy.
-  final Map<String, String> fields;
-
-  final String method;
+  /// The media record id, referenced by orders/production/delivery once ready.
+  final String mediaId;
 
   factory PresignedUpload.fromJson(Map<String, dynamic> json) {
     return PresignedUpload(
       uploadUrl: json['upload_url'] as String? ?? '',
-      publicUrl: json['public_url'] as String? ?? '',
-      method: json['method'] as String? ?? 'PUT',
-      fields: (json['fields'] as Map?)?.map(
-            (k, v) => MapEntry(k.toString(), v.toString()),
-          ) ??
-          const {},
+      s3Key: json['s3_key'] as String? ?? '',
+      mediaId: json['media_id'].toString(),
     );
   }
 }
 
-/// Handles media selection and direct-to-storage uploads via presigned URLs.
+/// Handles media selection and the direct-to-storage upload flow:
+/// presign -> PUT bytes to storage -> mark complete. Returns the media id.
 class UploadService {
   UploadService(this._api, {ImagePicker? picker})
       : _picker = picker ?? ImagePicker();
@@ -55,22 +56,22 @@ class UploadService {
   final ImagePicker _picker;
 
   /// Opens the system picker and returns the chosen image, if any.
-  Future<XFile?> pickImage({
-    ImageSource source = ImageSource.gallery,
-  }) {
+  Future<XFile?> pickImage({ImageSource source = ImageSource.gallery}) {
     return _picker.pickImage(source: source, imageQuality: 85);
   }
 
-  /// Requests a presigned upload target from the backend.
+  /// Requests a presigned upload target for [kind] (optionally tied to an order).
   Future<PresignedUpload> requestPresign({
-    required String filename,
+    required String kind,
     required String contentType,
+    String? orderId,
   }) async {
     final response = await _api.post<Map<String, dynamic>>(
       ApiEndpoints.mediaPresign,
       data: {
-        'filename': filename,
+        'kind': kind,
         'content_type': contentType,
+        if (orderId != null) 'order_id': orderId,
       },
     );
     final data = response.data;
@@ -83,32 +84,39 @@ class UploadService {
     return PresignedUpload.fromJson(data);
   }
 
-  /// Picks an image, requests a presign and PUTs the bytes to storage.
-  ///
-  /// Returns the public URL of the stored asset, or `null` if cancelled.
-  Future<String?> pickAndUploadImage({
+  /// Marks a media record uploaded once the bytes are stored.
+  Future<void> complete(String mediaId) =>
+      _api.post<void>(ApiEndpoints.mediaComplete(mediaId));
+
+  /// Picks an image and runs the full upload flow. Returns the media id, or
+  /// null if the user cancelled.
+  Future<String?> pickAndUpload({
+    required String kind,
+    String? orderId,
     ImageSource source = ImageSource.gallery,
   }) async {
     final file = await pickImage(source: source);
     if (file == null) return null;
     final bytes = await file.readAsBytes();
-    final contentType = file.mimeType ?? 'image/jpeg';
     return uploadBytes(
       bytes: bytes,
-      filename: file.name,
-      contentType: contentType,
+      contentType: file.mimeType ?? 'image/jpeg',
+      kind: kind,
+      orderId: orderId,
     );
   }
 
-  /// Uploads raw bytes to storage and returns the public URL.
+  /// Uploads raw bytes via the presign flow and returns the media id.
   Future<String> uploadBytes({
     required Uint8List bytes,
-    required String filename,
     required String contentType,
+    required String kind,
+    String? orderId,
   }) async {
     final presign = await requestPresign(
-      filename: filename,
+      kind: kind,
       contentType: contentType,
+      orderId: orderId,
     );
 
     // Upload straight to the storage provider (bypasses our API auth headers).
@@ -129,6 +137,8 @@ class UploadService {
     } finally {
       storageDio.close();
     }
-    return presign.publicUrl;
+
+    await complete(presign.mediaId);
+    return presign.mediaId;
   }
 }

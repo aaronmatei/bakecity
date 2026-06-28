@@ -53,9 +53,18 @@ class OrdersListScreen extends ConsumerWidget {
                       '${_statusLabel(order.status)} • '
                       '${Formatters.shortDate(order.createdAt)}',
                     ),
-                    trailing: order.totalCents != null
-                        ? Text(Formatters.currencyFromCents(order.totalCents!))
-                        : null,
+                    trailing: order.status == OrderStatus.completed
+                        ? TextButton(
+                            onPressed: () => context.goNamed(
+                              AppRoutes.orderReviewName,
+                              pathParameters: {'orderId': order.id},
+                            ),
+                            child: const Text('Review'),
+                          )
+                        : (order.totalCents != null
+                            ? Text(
+                                Formatters.currencyFromCents(order.totalCents!))
+                            : null),
                     onTap: () => context.goNamed(
                       AppRoutes.orderDetailName,
                       pathParameters: {'orderId': order.id},

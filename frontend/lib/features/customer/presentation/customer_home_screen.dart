@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../routes/app_routes.dart';
+import '../../notifications/application/notifications_controller.dart';
 
 /// Customer landing screen with bottom navigation to the main areas.
 class CustomerHomeScreen extends ConsumerStatefulWidget {
@@ -18,8 +19,23 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final unread = ref.watch(unreadNotificationsProvider).valueOrNull ?? 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('BakeCity')),
+      appBar: AppBar(
+        title: const Text('BakeCity'),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: unread > 0
+                ? Badge.count(
+                    count: unread,
+                    child: const Icon(Icons.notifications_outlined),
+                  )
+                : const Icon(Icons.notifications_outlined),
+            onPressed: () => context.goNamed(AppRoutes.notificationsName),
+          ),
+        ],
+      ),
       body: const Center(
         child: Padding(
           padding: EdgeInsets.all(24),

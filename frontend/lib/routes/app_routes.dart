@@ -20,6 +20,7 @@ class AppRoutes {
   static const String productDetail = '/products/:productId';
   static const String orders = '/orders';
   static const String orderDetail = '/orders/:orderId';
+  static const String orderReview = '/orders/:orderId/review';
 
   // Route names (for `goNamed`).
   static const String splashName = 'splash';
@@ -36,6 +37,7 @@ class AppRoutes {
   static const String productDetailName = 'productDetail';
   static const String ordersName = 'orders';
   static const String orderDetailName = 'orderDetail';
+  static const String orderReviewName = 'orderReview';
 
   // Order sub-tabs (query/segment for the order detail screen).
   static const String orderTabMessages = 'messages';
@@ -47,4 +49,5 @@ class AppRoutes {
 
   static String productDetailPath(String productId) => '/products/$productId';
   static String orderDetailPath(String orderId) => '/orders/$orderId';
+  static String orderReviewPath(String orderId) => '/orders/$orderId/review';
 }

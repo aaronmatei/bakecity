@@ -18,6 +18,7 @@ import '../features/orders/presentation/orders_list_screen.dart';
 import '../features/payments/presentation/payout_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/ratings/presentation/review_screen.dart';
 import 'app_routes.dart';
 
 /// A simple [ChangeNotifier] that GoRouter listens to. The provider body wires
@@ -126,6 +127,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.orderDetail,
         name: AppRoutes.orderDetailName,
         builder: (context, state) => OrderDetailScreen(
+          orderId: state.pathParameters['orderId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.orderReview,
+        name: AppRoutes.orderReviewName,
+        builder: (context, state) => ReviewScreen(
           orderId: state.pathParameters['orderId']!,
         ),
       ),
