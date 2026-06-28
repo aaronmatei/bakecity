@@ -88,6 +88,10 @@ class ApiEndpoints {
   static const String notificationsReadAll = '/notifications/read-all';
   static String notificationRead(String id) => '/notifications/$id/read';
 
+  /// Register/unregister this device's FCM push token (POST to add, DELETE to
+  /// remove). Body: `{ "token": ..., "platform": ... }`.
+  static const String notificationDevices = '/notifications/devices';
+
   /// WebSocket for realtime notifications. Auth is via the `token` query param
   /// (browsers can't set the Authorization header on a WS handshake).
   static String wsNotifications(String token) =>

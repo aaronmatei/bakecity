@@ -83,6 +83,17 @@ func (s *Service) UnreadCount(ctx context.Context, userID string) (int, error) {
 	return s.repo.UnreadCount(ctx, userID)
 }
 
+// RegisterDevice records (or refreshes) a device's push token for the user so
+// push notifications can be fanned out to it.
+func (s *Service) RegisterDevice(ctx context.Context, userID, token, platform string) error {
+	return s.repo.RegisterDeviceToken(ctx, userID, token, platform)
+}
+
+// UnregisterDevice drops a device's push token (e.g. on logout).
+func (s *Service) UnregisterDevice(ctx context.Context, userID, token string) error {
+	return s.repo.DeleteDeviceToken(ctx, userID, token)
+}
+
 // render produces a human-readable title and body for an event type. The body
 // is what gets pushed / texted; the structured payload travels in-app.
 func render(notifType string, _ map[string]any) (title, body string) {

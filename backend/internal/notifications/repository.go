@@ -116,6 +116,65 @@ func (r *Repository) UnreadCount(ctx context.Context, userID string) (int, error
 	return n, err
 }
 
+// RegisterDeviceToken upserts a device's push token for a user. The token is
+// the primary key, so re-registering the same token (e.g. the same device after
+// a different user logs in) reassigns it to the current user and refreshes
+// updated_at.
+func (r *Repository) RegisterDeviceToken(ctx context.Context, userID, token, platform string) error {
+	if r.db == nil {
+		return pkg.ErrNotImplemented
+	}
+	if platform == "" {
+		platform = "unknown"
+	}
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO device_tokens (token, user_id, platform)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (token) DO UPDATE
+		   SET user_id = EXCLUDED.user_id,
+		       platform = EXCLUDED.platform,
+		       updated_at = now()`,
+		token, userID, platform,
+	)
+	return err
+}
+
+// DeleteDeviceToken removes a device token for a user (e.g. on logout). It is
+// scoped to the owner so one user can't unregister another's device.
+func (r *Repository) DeleteDeviceToken(ctx context.Context, userID, token string) error {
+	if r.db == nil {
+		return pkg.ErrNotImplemented
+	}
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM device_tokens WHERE token = $1 AND user_id = $2`, token, userID)
+	return err
+}
+
+// DeviceTokensByUser returns the push tokens registered to a user's devices. A
+// production push Sender resolves a user's tokens through this before
+// delivering to FCM.
+func (r *Repository) DeviceTokensByUser(ctx context.Context, userID string) ([]string, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT token FROM device_tokens WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tokens := make([]string, 0)
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
 // UserPhone returns a user's phone number (for SMS), or ErrNotFound.
 func (r *Repository) UserPhone(ctx context.Context, userID string) (string, error) {
 	if r.db == nil {

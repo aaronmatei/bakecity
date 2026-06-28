@@ -34,6 +34,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/notifications/unread-count", h.UnreadCount)
 	rg.POST("/notifications/read-all", h.MarkAllRead)
 	rg.POST("/notifications/:id/read", h.MarkRead)
+	rg.POST("/notifications/devices", h.RegisterDevice)
+	rg.DELETE("/notifications/devices", h.UnregisterDevice)
 }
 
 // RegisterPublicRoutes wires the WebSocket endpoint. It is mounted without the
@@ -107,4 +109,40 @@ func (h *Handler) MarkAllRead(c *gin.Context) {
 		return
 	}
 	pkg.OK(c, gin.H{"marked_read": n})
+}
+
+type deviceTokenRequest struct {
+	Token    string `json:"token" binding:"required"`
+	Platform string `json:"platform"`
+}
+
+// RegisterDevice handles POST /notifications/devices — register or refresh this
+// device's FCM push token for the authenticated user.
+func (h *Handler) RegisterDevice(c *gin.Context) {
+	var req deviceTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	if err := h.svc.RegisterDevice(c.Request.Context(), middleware.UserIDFromContext(c), req.Token, req.Platform); err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.NoContent(c)
+}
+
+// UnregisterDevice handles DELETE /notifications/devices — drop this device's
+// push token (e.g. on logout) so it stops receiving push. The token travels in
+// the body because FCM tokens are long and not URL-path friendly.
+func (h *Handler) UnregisterDevice(c *gin.Context) {
+	var req deviceTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	if err := h.svc.UnregisterDevice(c.Request.Context(), middleware.UserIDFromContext(c), req.Token); err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.NoContent(c)
 }
