@@ -21,6 +21,7 @@ func NewHandler(svc *Service) *Handler {
 
 // RegisterRoutes wires the bakers routes.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.GET("/me/baker", h.GetMine)
 	rg.POST("/bakers", h.Create)
 	rg.GET("/bakers/:id", h.Get)
 	rg.PATCH("/bakers/:id", h.Update)
@@ -50,6 +51,17 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	pkg.Created(c, profile)
+}
+
+// GetMine handles GET /me/baker — the authenticated user's own baker profile
+// (for onboarding/KYC and the baker dashboard). 404 if they have none yet.
+func (h *Handler) GetMine(c *gin.Context) {
+	profile, err := h.svc.GetByUser(c.Request.Context(), middleware.UserIDFromContext(c))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, profile)
 }
 
 // Get handles GET /bakers/:id.

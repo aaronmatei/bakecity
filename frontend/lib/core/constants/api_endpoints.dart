@@ -22,6 +22,8 @@ class ApiEndpoints {
   static const String me = '/me';
 
   // ---- Bakers & onboarding ----
+  /// The authenticated user's own baker profile (onboarding / dashboard).
+  static const String myBaker = '/me/baker';
   static const String bakers = '/bakers';
   static String baker(String id) => '/bakers/$id';
   static String bakerVerify(String id) => '/bakers/$id/verify'; // KYC submission

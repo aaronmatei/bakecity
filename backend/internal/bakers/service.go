@@ -39,6 +39,11 @@ func (s *Service) Get(ctx context.Context, id string) (*BakerProfile, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
+// GetByUser returns the baker profile owned by the authenticated user.
+func (s *Service) GetByUser(ctx context.Context, userID string) (*BakerProfile, error) {
+	return s.repo.GetByUserID(ctx, userID)
+}
+
 // Update modifies a baker profile; only the owner or an admin may do so.
 func (s *Service) Update(ctx context.Context, actor Actor, id string, req UpdateBakerRequest) (*BakerProfile, error) {
 	if err := s.authorize(ctx, actor, id); err != nil {

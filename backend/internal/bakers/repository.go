@@ -104,6 +104,16 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*BakerProfile, err
 	return scanProfile(r.db.QueryRow(ctx, `SELECT `+profileColumns+` FROM baker_profiles WHERE id = $1`, id))
 }
 
+// GetByUserID fetches the baker profile owned by a user (for the signed-in
+// baker's own onboarding/dashboard). Returns ErrNotFound if the user has no
+// profile yet.
+func (r *Repository) GetByUserID(ctx context.Context, userID string) (*BakerProfile, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	return scanProfile(r.db.QueryRow(ctx, `SELECT `+profileColumns+` FROM baker_profiles WHERE user_id = $1`, userID))
+}
+
 // Update applies a partial update to a baker profile and returns the result.
 func (r *Repository) Update(ctx context.Context, id string, req UpdateBakerRequest) (*BakerProfile, error) {
 	if r.db == nil {

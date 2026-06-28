@@ -64,7 +64,9 @@ class AuthService {
     return _persistSession(response.data);
   }
 
-  /// Fetches the currently authenticated user.
+  /// Fetches the currently authenticated user. For bakers, also resolves
+  /// verification state from their profile so routing can skip onboarding once
+  /// approved.
   Future<AuthUser> currentUser() async {
     final response = await _api.get<Map<String, dynamic>>(ApiEndpoints.me);
     final data = response.data;
@@ -72,7 +74,24 @@ class AuthService {
       throw const AuthException('No active session.');
     }
     final userJson = (data['user'] ?? data['data'] ?? data) as Map<String, dynamic>;
-    return AuthUser.fromJson(userJson);
+    final user = AuthUser.fromJson(userJson);
+    if (user.isBaker) {
+      return user.copyWith(bakerVerified: await _bakerApproved());
+    }
+    return user;
+  }
+
+  /// Whether the signed-in baker's profile has been approved (gates publishing
+  /// and routes them past onboarding). Best-effort: any failure — including no
+  /// profile yet — is treated as not-yet-verified.
+  Future<bool> _bakerApproved() async {
+    try {
+      final response =
+          await _api.get<Map<String, dynamic>>(ApiEndpoints.myBaker);
+      return response.data?['status'] == 'approved';
+    } on AppException {
+      return false;
+    }
   }
 
   /// Clears local tokens; best-effort server-side logout.
