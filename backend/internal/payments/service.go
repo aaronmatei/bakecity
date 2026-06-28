@@ -13,6 +13,7 @@ import (
 )
 
 const webhookScope = "psp_webhook"
+const payoutScope = "payout"
 
 // Actor identifies the authenticated caller for authorization checks.
 type Actor struct {
@@ -113,6 +114,91 @@ func (s *Service) initiate(ctx context.Context, actor Actor, orderID, idemKey, p
 		}
 	}
 	return payment, nil
+}
+
+// BakerBalance reports the caller's baker ledger position (available, held in
+// escrow, and total paid out). The caller must own a baker profile.
+func (s *Service) BakerBalance(ctx context.Context, actor Actor) (*BalanceSummary, error) {
+	bakerID, err := s.orders.BakerIDForUser(ctx, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if bakerID == "" {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "caller is not a baker")
+	}
+	available, err := s.ledger.BakerAvailableBalance(ctx, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := s.ledger.BakerPendingBalance(ctx, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	paidOut, err := s.ledger.BakerPaidOut(ctx, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	return &BalanceSummary{Available: available, Pending: pending, PaidOut: paidOut}, nil
+}
+
+// RequestPayout disburses the caller-baker's full available balance to their
+// M-Pesa via the PSP, books the ledger debit, and records a payout. A
+// per-baker reservation prevents a concurrent double-payout; once paid, the
+// available balance is zero so a replay returns "no funds".
+func (s *Service) RequestPayout(ctx context.Context, actor Actor, idemKey string) (*Payout, error) {
+	bakerID, err := s.orders.BakerIDForUser(ctx, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if bakerID == "" {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "only a baker can request a payout")
+	}
+
+	// Serialize payouts per baker so two concurrent requests can't both pay.
+	if err := s.idem.Save(ctx, payoutScope, bakerID, "1"); err != nil {
+		if errors.Is(err, pkg.ErrIdempotencyConflict) {
+			return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "a payout is already in progress")
+		}
+		return nil, err
+	}
+	defer func() { _ = s.idem.Delete(ctx, payoutScope, bakerID) }()
+
+	available, err := s.ledger.BakerAvailableBalance(ctx, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	if available <= 0 {
+		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "no funds available for payout")
+	}
+	phone, err := s.repo.BakerPhone(ctx, bakerID)
+	if err != nil {
+		return nil, err
+	}
+
+	payout, err := s.repo.CreatePayout(ctx, bakerID, available)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.psp.Payout(ctx, pspclient.PayoutRequest{
+		BakerID: bakerID, Phone: phone, Amount: available, IdempotencyKey: idemKey,
+	})
+	if err != nil {
+		_, _ = s.repo.UpdatePayoutStatus(ctx, payout.ID, PayoutFailed, "")
+		return nil, err
+	}
+	if err := s.ledger.RecordPayout(ctx, bakerID, available); err != nil {
+		_, _ = s.repo.UpdatePayoutStatus(ctx, payout.ID, PayoutFailed, res.PSPRef)
+		return nil, err
+	}
+	paid, err := s.repo.UpdatePayoutStatus(ctx, payout.ID, PayoutPaid, res.PSPRef)
+	if err != nil {
+		return nil, err
+	}
+
+	s.notify.Notify(ctx, actor.UserID, notifications.TypePayoutSent,
+		map[string]any{"payout_id": paid.ID, "amount": paid.Amount})
+	return paid, nil
 }
 
 // HandleWebhook reconciles a PSP settlement callback. It is idempotent: each PSP

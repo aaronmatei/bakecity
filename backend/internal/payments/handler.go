@@ -24,6 +24,8 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/orders/:id/payments/deposit", h.Deposit)
 	rg.POST("/orders/:id/payments/balance", h.Balance)
+	rg.GET("/payouts/balance", h.PayoutBalance)
+	rg.POST("/payouts", h.RequestPayout)
 }
 
 // RegisterPublicRoutes wires the PSP webhook (no auth; verified by signature).
@@ -59,6 +61,27 @@ func (h *Handler) collect(c *gin.Context, fn initiateFn) {
 		return
 	}
 	pkg.Created(c, payment)
+}
+
+// PayoutBalance handles GET /payouts/balance (caller's baker ledger position).
+func (h *Handler) PayoutBalance(c *gin.Context) {
+	summary, err := h.svc.BakerBalance(c.Request.Context(), actorFrom(c))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, summary)
+}
+
+// RequestPayout handles POST /payouts: disburse the caller-baker's available
+// balance (idempotent per baker via the Idempotency-Key header).
+func (h *Handler) RequestPayout(c *gin.Context) {
+	payout, err := h.svc.RequestPayout(c.Request.Context(), actorFrom(c), c.GetHeader("Idempotency-Key"))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.Created(c, payout)
 }
 
 // Webhook handles POST /payments/webhook (idempotent, signature-verified).

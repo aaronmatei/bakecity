@@ -155,6 +155,12 @@ func (s *Service) BakerUserID(ctx context.Context, bakerID string) (string, erro
 	return sched.UserID, nil
 }
 
+// BakerIDForUser resolves the baker profile id owned by a user, or "" if the
+// user has no baker profile.
+func (s *Service) BakerIDForUser(ctx context.Context, userID string) (string, error) {
+	return s.repo.BakerIDForUser(ctx, userID)
+}
+
 // OnQuoteProposed moves an order into QUOTED when a baker proposes (or revises)
 // a quote. Valid from QUOTE_REQUESTED, NEGOTIATING, or QUOTED (idempotent).
 func (s *Service) OnQuoteProposed(ctx context.Context, orderID string) error {

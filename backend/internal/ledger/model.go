@@ -9,6 +9,7 @@ const (
 	AccountBakerAvailable  = "baker_available"
 	AccountPlatformRevenue = "platform_revenue"
 	AccountRefunds         = "refunds"
+	AccountPayouts         = "payouts" // funds disbursed out to a baker
 )
 
 // Transaction kinds.
@@ -17,6 +18,7 @@ const (
 	TxnBalance = "balance"
 	TxnRelease = "release"
 	TxnRefund  = "refund"
+	TxnPayout  = "payout"
 )
 
 // platformOwner is the synthetic owner id for singleton platform accounts

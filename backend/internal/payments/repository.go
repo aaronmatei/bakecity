@@ -81,3 +81,58 @@ func (r *Repository) UpdateStatus(ctx context.Context, id, status string) error 
 	_, err := r.db.Exec(ctx, `UPDATE payments SET status = $2 WHERE id = $1`, id, status)
 	return err
 }
+
+const payoutColumns = `id, baker_id, amount, COALESCE(psp_ref, ''), status, created_at`
+
+func scanPayout(row pgx.Row) (*Payout, error) {
+	var p Payout
+	err := row.Scan(&p.ID, &p.BakerID, &p.Amount, &p.PSPRef, &p.Status, &p.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, pkg.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// CreatePayout inserts a pending payout for a baker.
+func (r *Repository) CreatePayout(ctx context.Context, bakerID string, amount float64) (*Payout, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	return scanPayout(r.db.QueryRow(ctx,
+		`INSERT INTO payouts (baker_id, amount, status) VALUES ($1, $2, $3)
+		 RETURNING `+payoutColumns,
+		bakerID, amount, PayoutPending,
+	))
+}
+
+// UpdatePayoutStatus sets a payout's status and (on success) its PSP reference.
+func (r *Repository) UpdatePayoutStatus(ctx context.Context, id, status, pspRef string) (*Payout, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	return scanPayout(r.db.QueryRow(ctx,
+		`UPDATE payouts SET status = $2, psp_ref = COALESCE(NULLIF($3, ''), psp_ref)
+		  WHERE id = $1 RETURNING `+payoutColumns,
+		id, status, pspRef,
+	))
+}
+
+// BakerPhone returns the phone of the user who owns a baker profile, or
+// ErrNotFound if the baker does not exist.
+func (r *Repository) BakerPhone(ctx context.Context, bakerID string) (string, error) {
+	if r.db == nil {
+		return "", pkg.ErrNotImplemented
+	}
+	var phone string
+	err := r.db.QueryRow(ctx,
+		`SELECT u.phone FROM baker_profiles b JOIN users u ON u.id = b.user_id WHERE b.id = $1`,
+		bakerID,
+	).Scan(&phone)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", pkg.ErrNotFound
+	}
+	return phone, err
+}

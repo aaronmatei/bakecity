@@ -91,6 +91,15 @@ func TestEscrowFlow(t *testing.T) {
 	approx("commission delta", revAfter-revBefore, 1000)
 	approx("customer after release", custBal(), -20000)
 
+	// Payout: disburse the baker's available balance out to their M-Pesa.
+	if err := svc.RecordPayout(ctx, baker, 19000); err != nil {
+		t.Fatalf("payout: %v", err)
+	}
+	avail, _ = svc.BakerAvailableBalance(ctx, baker)
+	paidOut, _ := svc.BakerPaidOut(ctx, baker)
+	approx("available after payout", avail, 0)
+	approx("paid out after payout", paidOut, 19000)
+
 	// Refund flow on a separate pair.
 	c2, b2 := pkg.GenerateID(), pkg.GenerateID()
 	if err := svc.RecordDeposit(ctx, "", c2, b2, 5000); err != nil {

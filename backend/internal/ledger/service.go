@@ -142,9 +142,33 @@ func (s *Service) SettleDispute(ctx context.Context, orderID, customerID, bakerI
 	return nil
 }
 
+// RecordPayout debits a baker's available balance and credits the baker's
+// payouts (disbursed) account, reflecting funds sent out to the baker. The
+// double-entry pair keeps the global ledger balanced: available shrinks by the
+// same amount payouts grows.
+func (s *Service) RecordPayout(ctx context.Context, bakerID string, amount float64) error {
+	avail, err := s.repo.AccountID(ctx, AccountBakerAvailable, bakerID)
+	if err != nil {
+		return err
+	}
+	paid, err := s.repo.AccountID(ctx, AccountPayouts, bakerID)
+	if err != nil {
+		return err
+	}
+	return s.repo.PostTransaction(ctx, &Transaction{Kind: TxnPayout}, []Entry{
+		{AccountID: avail, Debit: amount},
+		{AccountID: paid, Credit: amount},
+	})
+}
+
 // BakerAvailableBalance is the amount a baker can be paid out.
 func (s *Service) BakerAvailableBalance(ctx context.Context, bakerID string) (float64, error) {
 	return s.repo.BalanceByKindOwner(ctx, AccountBakerAvailable, bakerID)
+}
+
+// BakerPaidOut is the total amount already disbursed to a baker.
+func (s *Service) BakerPaidOut(ctx context.Context, bakerID string) (float64, error) {
+	return s.repo.BalanceByKindOwner(ctx, AccountPayouts, bakerID)
 }
 
 // BakerPendingBalance is the amount currently held in escrow for a baker.
