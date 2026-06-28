@@ -30,6 +30,7 @@ import (
 	"github.com/corebalt/bakecity/internal/users"
 	"github.com/corebalt/bakecity/pkg"
 	"github.com/corebalt/bakecity/pkg/pspclient"
+	"github.com/corebalt/bakecity/pkg/storage"
 )
 
 // Deps carries the external dependencies handed to the router.
@@ -55,6 +56,7 @@ func New(deps Deps) *gin.Engine {
 
 	// Shared infrastructure.
 	psp := pspclient.NewStubClient()
+	presigner := storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
 	idem := pkg.NewIdempotencyStore(deps.Redis, 0)
 
 	// Repositories.
@@ -86,8 +88,8 @@ func New(deps Deps) *gin.Engine {
 	ordersSvc := orders.NewService(ordersRepo)
 	quotesSvc := quotes.NewService(quotesRepo, ordersSvc)
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
-	productionSvc := production.NewService(productionRepo)
-	mediaSvc := media.NewService(mediaRepo)
+	productionSvc := production.NewService(productionRepo, ordersSvc)
+	mediaSvc := media.NewService(mediaRepo, presigner)
 	deliverySvc := delivery.NewService(deliveryRepo)
 	ledgerSvc := ledger.NewService(ledgerRepo)
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc)

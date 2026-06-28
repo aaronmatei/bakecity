@@ -223,6 +223,18 @@ func (s *Service) MarkCompleted(ctx context.Context, id string) error {
 	return s.advance(ctx, id, StatusDelivered, StatusCompleted)
 }
 
+// StartProduction moves a DEPOSIT_PAID order to IN_PRODUCTION when the baker
+// posts the first production update. Idempotent if already in production.
+func (s *Service) StartProduction(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusDepositPaid, StatusInProduction)
+}
+
+// MarkReady moves an IN_PRODUCTION order to READY when production completes.
+// Idempotent if already ready.
+func (s *Service) MarkReady(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusInProduction, StatusReady)
+}
+
 // advance transitions an order from `from` to `to`; a no-op if already at `to`,
 // and a 409 from any other state.
 func (s *Service) advance(ctx context.Context, id, from, to string) error {

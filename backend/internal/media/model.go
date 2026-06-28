@@ -4,6 +4,21 @@ import (
 	"time"
 )
 
+// Media kinds (the purpose of an upload), matching the media.kind column.
+const (
+	KindReference     = "reference"      // customer's design reference photo
+	KindProduction    = "production"     // baker's production-stage photo
+	KindDeliveryProof = "delivery_proof" // proof-of-delivery photo
+	KindProduct       = "product"        // catalog product image
+)
+
+// Media upload lifecycle statuses.
+const (
+	StatusPending  = "pending"  // record created, bytes not yet uploaded
+	StatusUploaded = "uploaded" // client confirmed the upload completed
+	StatusReady    = "ready"    // processed (e.g. thumbnailed) and servable
+)
+
 // Media maps to the media table.
 type Media struct {
 	ID        string    `json:"id"`
