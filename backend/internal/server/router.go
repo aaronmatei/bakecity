@@ -3,6 +3,7 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,6 +61,7 @@ func New(deps Deps) *gin.Engine {
 	sender := notifications.NewStubSender()
 	hub := notifications.NewHub(deps.Redis)
 	idem := pkg.NewIdempotencyStore(deps.Redis, 0)
+	limiter := pkg.NewRateLimiter(deps.Redis)
 
 	// Repositories.
 	authRepo := auth.NewRepository(deps.DB)
@@ -121,10 +123,16 @@ func New(deps Deps) *gin.Engine {
 	analyticsH := analytics.NewHandler(analyticsSvc)
 
 	api := r.Group("/api/v1")
+	// Global per-IP rate limit across the whole API (fails open without Redis).
+	api.Use(middleware.RateLimit(limiter, "ip", deps.Cfg.RateLimitPerMinute, time.Minute, middleware.ClientIP))
+
+	// Auth endpoints get a stricter per-IP limit to blunt credential stuffing.
+	authGrp := api.Group("")
+	authGrp.Use(middleware.RateLimit(limiter, "auth", deps.Cfg.AuthRateLimitPerMinute, time.Minute, middleware.ClientIP))
+	authH.RegisterRoutes(authGrp)
 
 	// Public routes (no auth).
 	public := api.Group("")
-	authH.RegisterRoutes(public)
 	searchH.RegisterRoutes(public)
 	catalogH.RegisterPublicRoutes(public)       // browse products/categories
 	paymentsH.RegisterPublicRoutes(public)      // PSP webhook (signature-verified)

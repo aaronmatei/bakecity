@@ -37,6 +37,7 @@ const (
 	ErrCodeInternal       = "INTERNAL_ERROR"
 	ErrCodeValidation     = "VALIDATION_ERROR"
 	ErrCodeNotImplemented = "NOT_IMPLEMENTED"
+	ErrCodeRateLimited    = "RATE_LIMITED"
 )
 
 // APIError is a typed error carrying an HTTP status and a machine-readable code.

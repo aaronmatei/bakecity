@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -31,6 +32,10 @@ type Config struct {
 	ATUsername string
 
 	AdminEmail string
+
+	// Rate limiting (requests per minute per client IP).
+	RateLimitPerMinute     int
+	AuthRateLimitPerMinute int
 }
 
 // Load reads configuration from a .env file (if present) and the environment,
@@ -63,6 +68,9 @@ func Load() *Config {
 		ATUsername: getEnv("AT_USERNAME", ""),
 
 		AdminEmail: getEnv("ADMIN_EMAIL", "admin@bakecity.local"),
+
+		RateLimitPerMinute:     getEnvInt("RATE_LIMIT_PER_MINUTE", 120),
+		AuthRateLimitPerMinute: getEnvInt("AUTH_RATE_LIMIT_PER_MINUTE", 10),
 	}
 }
 
@@ -74,6 +82,15 @@ func (c *Config) IsProduction() bool {
 func getEnv(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }

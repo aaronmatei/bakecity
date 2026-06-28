@@ -74,6 +74,12 @@ Beyond the phases, the cross-cutting pieces from the spec are in place:
   cancel any pre-DELIVERED stage with a full refund. Percentages are platform
   defaults today; per-baker overrides are a future extension.
 
+- **Rate limiting** (§2): a Redis-backed fixed-window limiter caps requests per
+  client IP — a global limit across the API and a stricter limit on `auth/*`
+  (blunts credential stuffing). Responses carry `X-RateLimit-*`; a breach gets
+  `429` with `Retry-After`. Limits are configurable (`RATE_LIMIT_PER_MINUTE`,
+  `AUTH_RATE_LIMIT_PER_MINUTE`) and the limiter fails open if Redis is down.
+
 Money movements are double-entry through `internal/ledger`; payment, webhook, and
 payout paths are idempotent (Redis reservation + per-order ledger guards). The
 PSP, S3, and FCM/SMS clients are stub simulators in dev — point `DATABASE_URL`
@@ -81,8 +87,8 @@ at a migrated database and run `go test ./...` to exercise the DB-gated
 integration tests (e.g. the full escrow-to-payout lifecycle).
 
 The backend now covers the architecture spec end to end. Remaining work is
-operational hardening (real PSP/S3/FCM/SMS providers, per-baker refund config)
-and wiring the Flutter frontend to the newer endpoints.
+swapping the stub PSP/S3/FCM/SMS clients for real providers, per-baker refund
+config, and wiring the Flutter frontend to the newer endpoints.
 
 ## Getting Started
 
@@ -111,7 +117,7 @@ data-backed endpoints return errors until the dependencies are reachable.
 
 Key variables (see `.env.example`): `PORT`, `ENV`, `DATABASE_URL`, `REDIS_URL`,
 `JWT_SECRET`, `AWS_*`, `PSP_*`, `FCM_SERVER_KEY`, `AT_API_KEY`, `AT_USERNAME`,
-`ADMIN_EMAIL`.
+`ADMIN_EMAIL`, `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE`.
 
 ## API
 
