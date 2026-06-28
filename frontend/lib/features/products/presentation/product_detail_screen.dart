@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/helpers/formatters.dart';
+import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
@@ -56,6 +58,15 @@ class ProductDetailScreen extends ConsumerWidget {
               onPressed: () {
                 // TODO: Start the order request flow for this product.
               },
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => context.goNamed(
+                AppRoutes.bakerReviewsName,
+                pathParameters: {'bakerId': p.bakerId},
+              ),
+              icon: const Icon(Icons.star_outline),
+              label: const Text('View baker reviews'),
             ),
           ],
         ),

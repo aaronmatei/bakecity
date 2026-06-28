@@ -18,7 +18,7 @@ class AdminDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Admin console'),
@@ -30,15 +30,17 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
           ],
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
               Tab(text: 'Overview'),
               Tab(text: 'Bakers'),
               Tab(text: 'Disputes'),
+              Tab(text: 'Refund'),
             ],
           ),
         ),
         body: const TabBarView(
-          children: [_OverviewTab(), _BakersTab(), _DisputesTab()],
+          children: [_OverviewTab(), _BakersTab(), _DisputesTab(), _RefundTab()],
         ),
       ),
     );
@@ -229,6 +231,97 @@ class _DisputesTab extends ConsumerWidget {
     }
     resolutionCtrl.dispose();
     refundCtrl.dispose();
+  }
+}
+
+class _RefundTab extends ConsumerStatefulWidget {
+  const _RefundTab();
+
+  @override
+  ConsumerState<_RefundTab> createState() => _RefundTabState();
+}
+
+class _RefundTabState extends ConsumerState<_RefundTab> {
+  final _orderIdController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _reasonController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _orderIdController.dispose();
+    _amountController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final orderId = _orderIdController.text.trim();
+    final amount = double.tryParse(_amountController.text.trim());
+    final messenger = ScaffoldMessenger.of(context);
+    if (orderId.isEmpty || amount == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter an order id and amount.')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await ref.read(adminControllerProvider).refundOrder(
+            orderId,
+            amount: amount,
+            reason: _reasonController.text.trim(),
+          );
+      _orderIdController.clear();
+      _amountController.clear();
+      _reasonController.clear();
+      messenger.showSnackBar(const SnackBar(content: Text('Refund processed.')));
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          'Refund a cancelled order',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Returns the held deposit to the customer and marks the order '
+          'refunded. Disputed orders are settled from the Disputes tab.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _orderIdController,
+          decoration: const InputDecoration(labelText: 'Order ID'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Refund amount (KES)'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _reasonController,
+          decoration: const InputDecoration(labelText: 'Reason (optional)'),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: _submitting ? null : _submit,
+          icon: const Icon(Icons.payments_outlined),
+          label: Text(_submitting ? 'Processing…' : 'Process refund'),
+        ),
+      ],
+    );
   }
 }
 

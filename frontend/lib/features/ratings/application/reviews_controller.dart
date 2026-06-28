@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../services/api_client.dart';
+import '../domain/baker_reviews.dart';
 import '../domain/review.dart';
 
 /// The review for an order, or null if none has been left yet (404).
@@ -18,6 +19,15 @@ final orderReviewProvider =
     if (e.statusCode == 404) return null;
     rethrow;
   }
+});
+
+/// A baker's reviews with aggregate rating.
+final bakerReviewsProvider =
+    FutureProvider.family<BakerReviews, String>((ref, bakerId) async {
+  final api = ref.watch(apiClientProvider);
+  final response =
+      await api.get<Map<String, dynamic>>(ApiEndpoints.bakerReviews(bakerId));
+  return BakerReviews.fromJson(response.data ?? const {});
 });
 
 /// Submits customer reviews of completed orders.

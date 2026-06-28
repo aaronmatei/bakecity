@@ -17,6 +17,7 @@ import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/orders_list_screen.dart';
 import '../features/payments/presentation/payout_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
+import '../features/ratings/presentation/ratings_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/ratings/presentation/review_screen.dart';
 import 'app_routes.dart';
@@ -142,6 +143,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.productDetailName,
         builder: (context, state) => ProductDetailScreen(
           productId: state.pathParameters['productId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.bakerReviews,
+        name: AppRoutes.bakerReviewsName,
+        builder: (context, state) => RatingsScreen(
+          bakerId: state.pathParameters['bakerId']!,
         ),
       ),
     ],
