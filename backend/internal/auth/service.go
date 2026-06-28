@@ -40,12 +40,23 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthRespo
 
 	roleMask := roleMaskFor(req.Role)
 
+	// Bakers must supply a bakery name at sign-up; it seeds their baker profile.
+	// For non-bakers the field is ignored so no profile is created.
+	businessName := strings.TrimSpace(req.BusinessName)
+	if roleMask&middleware.RoleBaker != 0 {
+		if businessName == "" {
+			return nil, pkg.NewAPIError(http.StatusBadRequest, pkg.ErrCodeValidation, "bakery name is required")
+		}
+	} else {
+		businessName = ""
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, pkg.NewAPIError(http.StatusInternalServerError, pkg.ErrCodeInternal, "could not hash password").WithErr(err)
 	}
 
-	userID, err := s.repo.CreateUser(ctx, phone, req.Email, string(hash), roleMask)
+	userID, err := s.repo.CreateUser(ctx, phone, req.Email, string(hash), roleMask, businessName)
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotImplemented) {
 			return nil, pkg.NewAPIError(http.StatusNotImplemented, pkg.ErrCodeNotImplemented, "auth storage not configured")

@@ -17,18 +17,24 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _bakeryNameController = TextEditingController();
   UserRole _role = UserRole.customer;
+
+  bool get _isBaker => _role == UserRole.baker;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _bakeryNameController.dispose();
     super.dispose();
   }
 
@@ -38,8 +44,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           phone: _phoneController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          displayName: _nameController.text.trim(),
+          displayName:
+              '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'
+                  .trim(),
           role: _role.name,
+          businessName: _isBaker ? _bakeryNameController.text.trim() : null,
         );
     if (!success && mounted) {
       final message = ref.read(authControllerProvider).errorMessage;
@@ -68,15 +77,41 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextFormField(
-                      controller: _nameController,
+                      controller: _firstNameController,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                        labelText: 'Full name',
+                        labelText: 'First name',
                         prefixIcon: Icon(Icons.badge_outlined),
                       ),
                       validator: (v) =>
-                          Validators.required(v, field: 'Full name'),
+                          Validators.required(v, field: 'First name'),
                     ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _lastNameController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Last name',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      validator: (v) =>
+                          Validators.required(v, field: 'Last name'),
+                    ),
+                    if (_isBaker) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _bakeryNameController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Bakery name',
+                          hintText: 'e.g. Bakes by Mary',
+                          prefixIcon: Icon(Icons.storefront_outlined),
+                        ),
+                        validator: (v) => _isBaker
+                            ? Validators.required(v, field: 'Bakery name')
+                            : null,
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _phoneController,

@@ -84,6 +84,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String password,
     String? displayName,
     String role = 'customer',
+    String? businessName,
   }) async {
     return _run(() => _authService.register(
           phone: phone,
@@ -91,6 +92,7 @@ class AuthController extends StateNotifier<AuthState> {
           password: password,
           displayName: displayName,
           role: role,
+          businessName: businessName,
         ));
   }
 

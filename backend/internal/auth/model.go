@@ -8,6 +8,9 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password" binding:"required,min=8"`
 	Role     string `json:"role"` // customer | baker
+	// BusinessName is the bakery's display name. Required when Role is "baker";
+	// ignored otherwise.
+	BusinessName string `json:"business_name"`
 }
 
 // LoginRequest is the payload for user login.

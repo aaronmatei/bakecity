@@ -86,3 +86,7 @@ coverage/
 # Environment
 .env
 .env.local
+
+# Android build output (generated)
+android/build/
+android/app/build/

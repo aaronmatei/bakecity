@@ -1,3 +1,5 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 /// Centralised definition of backend API paths.
 ///
 /// Paths are relative to [baseUrl]; parameterised paths are exposed as
@@ -6,11 +8,10 @@
 class ApiEndpoints {
   const ApiEndpoints._();
 
-  /// Base URL for the API. Overridable at build time via `--dart-define`.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:8080/api/v1',
-  );
+  /// Base URL for the API. Read from `.env` (`API_BASE_URL`); falls back to
+  /// localhost for development when the key is absent.
+  static String get baseUrl =>
+      dotenv.env['API_BASE_URL'] ?? 'http://localhost:8080/api/v1';
 
   /// WebSocket base, derived from [baseUrl] (http->ws, https->wss).
   static String get wsBaseUrl => baseUrl.replaceFirst('http', 'ws');

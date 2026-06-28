@@ -32,6 +32,7 @@ class AuthService {
     required String password,
     String? displayName,
     String role = 'customer',
+    String? businessName,
   }) async {
     final response = await _api.post<Map<String, dynamic>>(
       ApiEndpoints.register,
@@ -41,6 +42,8 @@ class AuthService {
         'password': password,
         if (displayName != null) 'display_name': displayName,
         'role': role,
+        if (businessName != null && businessName.trim().isNotEmpty)
+          'business_name': businessName.trim(),
       },
     );
     return _persistSession(response.data);
