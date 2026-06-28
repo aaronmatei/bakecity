@@ -22,17 +22,56 @@ backend/
 │       ├── service.go             #   Service{repo,...} business logic
 │       └── handler.go             #   Handler{svc} + RegisterRoutes(rg)
 ├── pkg/                           # Shared: errors, httpx, uuid, validation,
-│   │                              #   idempotency (Redis), pspclient
-│   └── pspclient/                 # PSPClient interface + StubClient
+│   │                              #   idempotency (Redis)
+│   ├── pspclient/                 # PSPClient interface + StubClient
+│   └── storage/                   # Presigner interface + StubPresigner (S3)
 └── migrations/                    # golang-migrate SQL (PostGIS + pgcrypto)
 ```
 
 Domains: `auth users bakers catalog search orders quotes messaging production
 media delivery payments ledger disputes reviews notifications admin analytics`.
 
-`auth` is fleshed out (register/login with bcrypt + HS256 JWT). The orders state
-machine lives in `internal/orders/statemachine.go`. Most other handlers are
-wired stubs returning `501 NOT_IMPLEMENTED` via `pkg.NotImplemented`.
+Every domain is implemented end to end (see **Implementation status**).
+`auth` uses bcrypt + HS256 JWT; the orders state machine lives in
+`internal/orders/statemachine.go`. External integrations — `pkg/pspclient`
+(PSP), `pkg/storage` (S3), and the notifications `Sender` (FCM / Africa's
+Talking) — ship as in-process **stub simulators** for local development; swap in
+real providers before production.
+
+## Implementation status
+
+The backend is feature-complete against the architecture spec. The MVP phases
+follow [the phasing plan](../bakecity-architecture.md#11-mvp-phasing):
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Auth, roles, baker onboarding/verification, minimal admin | ✅ |
+| 2 | Bakers, catalog (categories), discovery/search + geo | ✅ |
+| 3 | Orders, versioned quotes, messaging, scheduling/lead-time | ✅ |
+| 4 | Payments via PSP — escrow hold, split, payout, refunds, commission | ✅ |
+| 5 | Production timeline + media (presigned uploads) | ✅ |
+| 6 | Delivery + proof-of-delivery wired to payout release | ✅ |
+| 7 | Ratings, dispute hardening, analytics | ✅ |
+
+Beyond the phases, the cross-cutting pieces from the spec are in place:
+
+- **Baker payouts** (§8): `POST /payouts` disburses a baker's available balance
+  via the PSP, books the ledger debit (`baker_available → payouts`), and records
+  it; `GET /payouts/balance` shows available / held / paid-out.
+- **Notifications & events** (§10): a durable in-app feed (`/notifications`) plus
+  best-effort push/SMS fan-out, emitted from the order lifecycle (quote, deposit,
+  production, delivery, completion, dispute, payout). Money-critical events also
+  go out over SMS.
+
+Money movements are double-entry through `internal/ledger`; payment, webhook, and
+payout paths are idempotent (Redis reservation + per-order ledger guards). The
+PSP, S3, and FCM/SMS flows run against stub clients in dev — point
+`DATABASE_URL` at a migrated database and run `go test ./...` to exercise the
+DB-gated integration tests (e.g. the full escrow-to-payout lifecycle).
+
+Not yet built: live WebSocket transport for realtime push (the in-app feed is
+the durable channel), and the per-stage cancellation refund percentages from §7
+(refund execution is a manual admin action returning the held deposit).
 
 ## Getting Started
 
