@@ -12,6 +12,7 @@ class AppRoutes {
   static const String bakerHome = '/baker';
   static const String discovery = '/discovery';
   static const String notifications = '/notifications';
+  static const String payouts = '/payouts';
   static const String profile = '/profile';
 
   // Parameterised.
@@ -28,6 +29,7 @@ class AppRoutes {
   static const String bakerHomeName = 'bakerHome';
   static const String discoveryName = 'discovery';
   static const String notificationsName = 'notifications';
+  static const String payoutsName = 'payouts';
   static const String profileName = 'profile';
   static const String productDetailName = 'productDetail';
   static const String ordersName = 'orders';

@@ -14,6 +14,7 @@ import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/orders_list_screen.dart';
+import '../features/payments/presentation/payout_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import 'app_routes.dart';
@@ -99,6 +100,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.notifications,
         name: AppRoutes.notificationsName,
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.payouts,
+        name: AppRoutes.payoutsName,
+        builder: (context, state) => const PayoutScreen(),
       ),
       GoRoute(
         path: AppRoutes.profile,

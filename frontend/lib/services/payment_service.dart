@@ -43,6 +43,56 @@ class PaymentInitResult {
   }
 }
 
+/// A baker's ledger position (GET /payouts/balance).
+class BakerBalance {
+  const BakerBalance({
+    required this.available,
+    required this.pending,
+    required this.paidOut,
+  });
+
+  /// Released funds awaiting payout (KES).
+  final double available;
+
+  /// Funds held in escrow for in-flight orders (KES).
+  final double pending;
+
+  /// Total disbursed to date (KES).
+  final double paidOut;
+
+  factory BakerBalance.fromJson(Map<String, dynamic> json) {
+    return BakerBalance(
+      available: (json['available'] as num?)?.toDouble() ?? 0,
+      pending: (json['pending'] as num?)?.toDouble() ?? 0,
+      paidOut: (json['paid_out'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// Result of a payout request (POST /payouts).
+class PayoutResult {
+  const PayoutResult({
+    required this.id,
+    required this.amount,
+    required this.status,
+    this.pspRef,
+  });
+
+  final String id;
+  final double amount;
+  final String status; // paid | failed | pending
+  final String? pspRef;
+
+  factory PayoutResult.fromJson(Map<String, dynamic> json) {
+    return PayoutResult(
+      id: json['id'].toString(),
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      status: json['status'] as String? ?? '',
+      pspRef: json['psp_ref'] as String?,
+    );
+  }
+}
+
 /// Triggers escrow deposit / balance payments via the backend.
 ///
 /// The backend handles the actual provider integration and receives the
@@ -73,6 +123,20 @@ class PaymentService {
       ApiEndpoints.orderPaymentBalance(orderId),
       phone: phone,
     );
+  }
+
+  /// Fetches the caller-baker's available / held / paid-out balances.
+  Future<BakerBalance> fetchBalance() async {
+    final response =
+        await _api.get<Map<String, dynamic>>(ApiEndpoints.payoutsBalance);
+    return BakerBalance.fromJson(response.data ?? const {});
+  }
+
+  /// Requests a payout of the baker's full available balance.
+  Future<PayoutResult> requestPayout() async {
+    final response =
+        await _api.post<Map<String, dynamic>>(ApiEndpoints.payouts);
+    return PayoutResult.fromJson(response.data ?? const {});
   }
 
   Future<PaymentInitResult> _initiate(

@@ -18,7 +18,16 @@ class _BakerHomeScreenState extends ConsumerState<BakerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Baker Dashboard')),
+      appBar: AppBar(
+        title: const Text('Baker Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => context.goNamed(AppRoutes.notificationsName),
+          ),
+        ],
+      ),
       body: const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -36,6 +45,8 @@ class _BakerHomeScreenState extends ConsumerState<BakerHomeScreen> {
             case 1:
               context.goNamed(AppRoutes.ordersName);
             case 2:
+              context.goNamed(AppRoutes.payoutsName);
+            case 3:
               context.goNamed(AppRoutes.profileName);
           }
         },
@@ -49,6 +60,11 @@ class _BakerHomeScreenState extends ConsumerState<BakerHomeScreen> {
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Orders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Earnings',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
