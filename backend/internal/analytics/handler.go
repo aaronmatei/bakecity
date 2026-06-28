@@ -23,5 +23,10 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 // Overview handles GET /analytics/overview.
 func (h *Handler) Overview(c *gin.Context) {
-	pkg.NotImplemented(c)
+	stats, err := h.svc.Overview(c.Request.Context())
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, stats)
 }

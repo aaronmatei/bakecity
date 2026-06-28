@@ -247,6 +247,52 @@ func (s *Service) MarkDelivered(ctx context.Context, id string) error {
 	return s.advance(ctx, id, StatusOutForDelivery, StatusDelivered)
 }
 
+// MarkRefunded moves a CANCELLED order to REFUNDED once its refund has been
+// processed. Idempotent if already refunded.
+func (s *Service) MarkRefunded(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusCancelled, StatusRefunded)
+}
+
+// RaiseDispute freezes an order by moving it to DISPUTED from any state where a
+// dispute is permitted (funds held). Idempotent if already disputed.
+func (s *Service) RaiseDispute(ctx context.Context, id string) (*Order, error) {
+	o, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status == StatusDisputed {
+		return o, nil // idempotent
+	}
+	if !CanTransition(o.Status, StatusDisputed) {
+		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "order cannot be disputed from "+o.Status)
+	}
+	if err := s.repo.UpdateStatus(ctx, id, StatusDisputed); err != nil {
+		return nil, err
+	}
+	o.Status = StatusDisputed
+	return o, nil
+}
+
+// ResolveDispute moves a DISPUTED order to a terminal resolution: COMPLETED
+// (released to the baker) or REFUNDED (returned to the customer).
+func (s *Service) ResolveDispute(ctx context.Context, id, toStatus string) (*Order, error) {
+	if toStatus != StatusCompleted && toStatus != StatusRefunded {
+		return nil, pkg.NewAPIError(http.StatusBadRequest, pkg.ErrCodeValidation, "a dispute resolves to COMPLETED or REFUNDED")
+	}
+	o, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status != StatusDisputed {
+		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "order is not under dispute")
+	}
+	if err := s.repo.UpdateStatus(ctx, id, toStatus); err != nil {
+		return nil, err
+	}
+	o.Status = toStatus
+	return o, nil
+}
+
 // advance transitions an order from `from` to `to`; a no-op if already at `to`,
 // and a 409 from any other state.
 func (s *Service) advance(ctx context.Context, id, from, to string) error {

@@ -93,10 +93,10 @@ func New(deps Deps) *gin.Engine {
 	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc)
 	ledgerSvc := ledger.NewService(ledgerRepo)
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc)
-	disputesSvc := disputes.NewService(disputesRepo)
+	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc)
 	reviewsSvc := reviews.NewService(reviewsRepo, ordersSvc)
 	notificationsSvc := notifications.NewService(notificationsRepo)
-	adminSvc := admin.NewService(adminRepo)
+	adminSvc := admin.NewService(adminRepo, ordersSvc, ledgerSvc, disputesSvc)
 	analyticsSvc := analytics.NewService(analyticsRepo)
 
 	// Handlers.
