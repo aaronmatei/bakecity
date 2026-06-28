@@ -55,9 +55,10 @@ class ProductDetailScreen extends ConsumerWidget {
             PrimaryButton(
               label: 'Request a custom order',
               icon: Icons.add_shopping_cart_outlined,
-              onPressed: () {
-                // TODO: Start the order request flow for this product.
-              },
+              onPressed: () => context.pushNamed(
+                AppRoutes.productOrderRequestName,
+                pathParameters: {'productId': p.id},
+              ),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(

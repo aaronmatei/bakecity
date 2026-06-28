@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/api_endpoints.dart';
-import '../../../core/errors/app_exception.dart';
 import '../../../services/api_client.dart';
 import '../domain/order.dart';
 
@@ -33,8 +32,9 @@ class OrdersController extends AsyncNotifier<List<Order>> {
 
   /// Creates a new order request (status QUOTE_REQUESTED). [eventDate] is sent
   /// as YYYY-MM-DD; [specs] are free-form key/value attributes (flavor, tiers…).
-  /// Returns the created order on success.
-  Future<Order?> createOrder({
+  /// Returns the created order; throws an [AppException] on failure so the
+  /// caller can surface the message.
+  Future<Order> createOrder({
     required String bakerId,
     required DateTime eventDate,
     String? productId,
@@ -43,29 +43,25 @@ class OrdersController extends AsyncNotifier<List<Order>> {
     double? lng,
     Map<String, String> specs = const {},
   }) async {
-    try {
-      final response = await _api.post<Map<String, dynamic>>(
-        ApiEndpoints.orders,
-        data: {
-          'baker_id': bakerId,
-          'event_date': _ymd(eventDate),
-          if (productId != null) 'product_id': productId,
-          if (deliveryAddress != null) 'delivery_address': deliveryAddress,
-          if (lat != null) 'lat': lat,
-          if (lng != null) 'lng': lng,
-          if (specs.isNotEmpty)
-            'specs': [
-              for (final e in specs.entries) {'key': e.key, 'value': e.value},
-            ],
-        },
-      );
-      final order = Order.fromJson(response.data!);
-      await refresh();
-      return order;
-    } on AppException {
-      // TODO: Surface error to the caller / UI.
-      return null;
-    }
+    final response = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.orders,
+      data: {
+        'baker_id': bakerId,
+        'event_date': _ymd(eventDate),
+        if (productId != null) 'product_id': productId,
+        if (deliveryAddress != null && deliveryAddress.isNotEmpty)
+          'delivery_address': deliveryAddress,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+        if (specs.isNotEmpty)
+          'specs': [
+            for (final e in specs.entries) {'key': e.key, 'value': e.value},
+          ],
+      },
+    );
+    final order = Order.fromJson(response.data!);
+    await refresh();
+    return order;
   }
 
   /// Formats a date as the backend's expected YYYY-MM-DD.

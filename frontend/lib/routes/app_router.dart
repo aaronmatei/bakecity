@@ -14,6 +14,7 @@ import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
+import '../features/orders/presentation/order_request_screen.dart';
 import '../features/orders/presentation/orders_list_screen.dart';
 import '../features/payments/presentation/payout_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
@@ -142,6 +143,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.productDetail,
         name: AppRoutes.productDetailName,
         builder: (context, state) => ProductDetailScreen(
+          productId: state.pathParameters['productId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.productOrderRequest,
+        name: AppRoutes.productOrderRequestName,
+        builder: (context, state) => OrderRequestScreen(
           productId: state.pathParameters['productId']!,
         ),
       ),
