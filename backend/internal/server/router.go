@@ -94,7 +94,7 @@ func New(deps Deps) *gin.Engine {
 	ledgerSvc := ledger.NewService(ledgerRepo)
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc)
 	disputesSvc := disputes.NewService(disputesRepo)
-	reviewsSvc := reviews.NewService(reviewsRepo)
+	reviewsSvc := reviews.NewService(reviewsRepo, ordersSvc)
 	notificationsSvc := notifications.NewService(notificationsRepo)
 	adminSvc := admin.NewService(adminRepo)
 	analyticsSvc := analytics.NewService(analyticsRepo)
