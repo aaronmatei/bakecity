@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
 	"github.com/corebalt/bakecity/pkg"
 )
@@ -20,11 +21,12 @@ type Actor struct {
 type Service struct {
 	repo   *Repository
 	orders *orders.Service
+	notify *notifications.Service
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, ordersSvc *orders.Service) *Service {
-	return &Service{repo: repo, orders: ordersSvc}
+func NewService(repo *Repository, ordersSvc *orders.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, orders: ordersSvc, notify: notifySvc}
 }
 
 // Propose lets the order's baker offer (or revise) a quote, moving the order to
@@ -55,7 +57,13 @@ func (s *Service) Propose(ctx context.Context, actor Actor, orderID string, req 
 	if err := s.orders.OnQuoteProposed(ctx, orderID); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, validUntil)
+	q, err := s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, validUntil)
+	if err != nil {
+		return nil, err
+	}
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeQuoteProposed,
+		map[string]any{"order_id": orderID, "quote_id": q.ID, "amount": q.Amount})
+	return q, nil
 }
 
 // Accept lets the order's customer accept a pending quote, re-validating
@@ -92,6 +100,10 @@ func (s *Service) Accept(ctx context.Context, actor Actor, orderID, quoteID stri
 		return nil, nil, err
 	}
 	q.Status = StatusAccepted
+	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeQuoteAccepted,
+			map[string]any{"order_id": orderID, "amount": q.Amount})
+	}
 	return updated, q, nil
 }
 

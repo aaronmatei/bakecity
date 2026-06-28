@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/corebalt/bakecity/internal/ledger"
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
 	"github.com/corebalt/bakecity/pkg"
 )
@@ -24,12 +25,21 @@ type Service struct {
 	repo   *Repository
 	orders *orders.Service
 	ledger *ledger.Service
+	notify *notifications.Service
 	now    func() time.Time
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, ordersSvc *orders.Service, ledgerSvc *ledger.Service) *Service {
-	return &Service{repo: repo, orders: ordersSvc, ledger: ledgerSvc, now: time.Now}
+func NewService(repo *Repository, ordersSvc *orders.Service, ledgerSvc *ledger.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, orders: ordersSvc, ledger: ledgerSvc, notify: notifySvc, now: time.Now}
+}
+
+// notifyParticipants sends a notification to both the order's customer and baker.
+func (s *Service) notifyParticipants(ctx context.Context, order *orders.Order, notifType string, payload map[string]any) {
+	s.notify.Notify(ctx, order.CustomerID, notifType, payload)
+	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifType, payload)
+	}
 }
 
 // Raise lets a participant open a dispute on an order, freezing it (-> DISPUTED).
@@ -44,7 +54,12 @@ func (s *Service) Raise(ctx context.Context, actor Actor, orderID string, req Cr
 	if _, err := s.orders.RaiseDispute(ctx, orderID); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(ctx, orderID, actor.UserID, req.Reason)
+	d, err := s.repo.Create(ctx, orderID, actor.UserID, req.Reason)
+	if err != nil {
+		return nil, err
+	}
+	s.notifyParticipants(ctx, order, notifications.TypeDisputeRaised, map[string]any{"order_id": orderID, "dispute_id": d.ID})
+	return d, nil
 }
 
 // ListForOrder returns an order's disputes; participants and admins only.
@@ -99,6 +114,8 @@ func (s *Service) Resolve(ctx context.Context, adminUserID, disputeID, resolutio
 	if err != nil {
 		return nil, err
 	}
+	s.notifyParticipants(ctx, order, notifications.TypeDisputeResolved,
+		map[string]any{"order_id": order.ID, "dispute_id": resolved.ID, "refund_amount": refund, "outcome": toStatus})
 	return resolved, nil
 }
 

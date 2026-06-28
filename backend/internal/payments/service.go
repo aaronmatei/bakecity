@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/corebalt/bakecity/internal/ledger"
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
 	"github.com/corebalt/bakecity/pkg"
 	"github.com/corebalt/bakecity/pkg/pspclient"
@@ -28,11 +29,12 @@ type Service struct {
 	idem   *pkg.IdempotencyStore
 	ledger *ledger.Service
 	orders *orders.Service
+	notify *notifications.Service
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, psp pspclient.PSPClient, idem *pkg.IdempotencyStore, ledgerSvc *ledger.Service, ordersSvc *orders.Service) *Service {
-	return &Service{repo: repo, psp: psp, idem: idem, ledger: ledgerSvc, orders: ordersSvc}
+func NewService(repo *Repository, psp pspclient.PSPClient, idem *pkg.IdempotencyStore, ledgerSvc *ledger.Service, ordersSvc *orders.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, psp: psp, idem: idem, ledger: ledgerSvc, orders: ordersSvc, notify: notifySvc}
 }
 
 // InitiateDeposit starts an STK push for an APPROVED order's deposit.
@@ -166,6 +168,8 @@ func (s *Service) HandleWebhook(ctx context.Context, signature string, body []by
 		if err := s.orders.MarkDepositPaid(ctx, order.ID); err != nil {
 			return release(err)
 		}
+		s.notify.Notify(ctx, order.CustomerID, notifications.TypeDepositConfirmed,
+			map[string]any{"order_id": order.ID, "amount": payment.Amount})
 	case KindBalance:
 		if err := s.ledger.RecordBalanceAndRelease(ctx, order.ID, order.CustomerID, order.BakerID,
 			payment.Amount, order.TotalAmount, order.CommissionAmount); err != nil {
@@ -173,6 +177,11 @@ func (s *Service) HandleWebhook(ctx context.Context, signature string, body []by
 		}
 		if err := s.orders.MarkCompleted(ctx, order.ID); err != nil {
 			return release(err)
+		}
+		s.notify.Notify(ctx, order.CustomerID, notifications.TypeOrderCompleted, map[string]any{"order_id": order.ID})
+		s.notify.Notify(ctx, order.CustomerID, notifications.TypeReviewRequest, map[string]any{"order_id": order.ID})
+		if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
+			s.notify.Notify(ctx, bakerUserID, notifications.TypeOrderCompleted, map[string]any{"order_id": order.ID})
 		}
 	case KindRefund:
 		if err := s.ledger.RecordRefund(ctx, order.ID, order.CustomerID, order.BakerID, payment.Amount); err != nil {

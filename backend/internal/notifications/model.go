@@ -22,3 +22,26 @@ const (
 	ChannelSMS   = "sms"
 	ChannelInApp = "in_app"
 )
+
+// Notification types (the realtime events from the architecture spec §10).
+const (
+	TypeQuoteProposed    = "quote_proposed"
+	TypeQuoteAccepted    = "quote_accepted"
+	TypeDepositConfirmed = "deposit_confirmed"
+	TypeProductionUpdate = "production_update"
+	TypeOutForDelivery   = "out_for_delivery"
+	TypeDelivered        = "delivered"
+	TypeOrderCompleted   = "order_completed"
+	TypeReviewRequest    = "review_request"
+	TypeDisputeRaised    = "dispute_raised"
+	TypeDisputeResolved  = "dispute_resolved"
+	TypePayoutSent       = "payout_sent"
+)
+
+// moneyCritical types are also pushed over SMS (high-trust in Kenya), per §10:
+// deposit confirmed, balance due / order completed, payout sent.
+var moneyCritical = map[string]bool{
+	TypeDepositConfirmed: true,
+	TypeOrderCompleted:   true,
+	TypePayoutSent:       true,
+}

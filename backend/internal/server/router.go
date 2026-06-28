@@ -57,6 +57,7 @@ func New(deps Deps) *gin.Engine {
 	// Shared infrastructure.
 	psp := pspclient.NewStubClient()
 	presigner := storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
+	sender := notifications.NewStubSender()
 	idem := pkg.NewIdempotencyStore(deps.Redis, 0)
 
 	// Repositories.
@@ -85,17 +86,17 @@ func New(deps Deps) *gin.Engine {
 	bakersSvc := bakers.NewService(bakersRepo)
 	catalogSvc := catalog.NewService(catalogRepo)
 	searchSvc := search.NewService(searchRepo)
+	notificationsSvc := notifications.NewService(notificationsRepo, sender)
 	ordersSvc := orders.NewService(ordersRepo)
-	quotesSvc := quotes.NewService(quotesRepo, ordersSvc)
+	quotesSvc := quotes.NewService(quotesRepo, ordersSvc, notificationsSvc)
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
-	productionSvc := production.NewService(productionRepo, ordersSvc)
+	productionSvc := production.NewService(productionRepo, ordersSvc, notificationsSvc)
 	mediaSvc := media.NewService(mediaRepo, presigner)
-	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc)
+	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc, notificationsSvc)
 	ledgerSvc := ledger.NewService(ledgerRepo)
-	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc)
-	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc)
+	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc, notificationsSvc)
+	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc, notificationsSvc)
 	reviewsSvc := reviews.NewService(reviewsRepo, ordersSvc)
-	notificationsSvc := notifications.NewService(notificationsRepo)
 	adminSvc := admin.NewService(adminRepo, ordersSvc, ledgerSvc, disputesSvc)
 	analyticsSvc := analytics.NewService(analyticsRepo)
 

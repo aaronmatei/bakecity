@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
 	"github.com/corebalt/bakecity/pkg"
 )
@@ -20,11 +21,12 @@ type Actor struct {
 type Service struct {
 	repo   *Repository
 	orders *orders.Service
+	notify *notifications.Service
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, ordersSvc *orders.Service) *Service {
-	return &Service{repo: repo, orders: ordersSvc}
+func NewService(repo *Repository, ordersSvc *orders.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, orders: ordersSvc, notify: notifySvc}
 }
 
 // Dispatch records a dispatch for a READY order; baker (or admin) only. Moves
@@ -56,7 +58,13 @@ func (s *Service) Dispatch(ctx context.Context, actor Actor, orderID string, req
 		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
 			"order is not ready for dispatch (status: "+order.Status+")")
 	}
-	return s.repo.Dispatch(ctx, orderID, req.Method, req.CourierRef)
+	d, err := s.repo.Dispatch(ctx, orderID, req.Method, req.CourierRef)
+	if err != nil {
+		return nil, err
+	}
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeOutForDelivery,
+		map[string]any{"order_id": orderID, "method": req.Method})
+	return d, nil
 }
 
 // Confirm records proof-of-delivery and moves an OUT_FOR_DELIVERY order to
@@ -91,7 +99,16 @@ func (s *Service) Confirm(ctx context.Context, actor Actor, orderID string, req 
 		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
 			"order is not out for delivery (status: "+order.Status+")")
 	}
-	return s.repo.Confirm(ctx, orderID, req.ProofMediaID)
+	d, err := s.repo.Confirm(ctx, orderID, req.ProofMediaID)
+	if err != nil {
+		return nil, err
+	}
+	// Notify both parties; the balance invoice is now due.
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeDelivered, map[string]any{"order_id": orderID})
+	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeDelivered, map[string]any{"order_id": orderID})
+	}
+	return d, nil
 }
 
 // Get returns an order's delivery; participants and admins only.

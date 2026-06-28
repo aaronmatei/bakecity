@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
 	"github.com/corebalt/bakecity/pkg"
 )
@@ -20,11 +21,12 @@ type Actor struct {
 type Service struct {
 	repo   *Repository
 	orders *orders.Service
+	notify *notifications.Service
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, ordersSvc *orders.Service) *Service {
-	return &Service{repo: repo, orders: ordersSvc}
+func NewService(repo *Repository, ordersSvc *orders.Service, notifySvc *notifications.Service) *Service {
+	return &Service{repo: repo, orders: ordersSvc, notify: notifySvc}
 }
 
 // Add records a production update posted by the order's baker. The first update
@@ -65,6 +67,8 @@ func (s *Service) Add(ctx context.Context, actor Actor, orderID string, req Crea
 			return nil, err
 		}
 	}
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeProductionUpdate,
+		map[string]any{"order_id": orderID, "stage": upd.Stage, "progress_pct": upd.ProgressPct})
 	return upd, nil
 }
 
