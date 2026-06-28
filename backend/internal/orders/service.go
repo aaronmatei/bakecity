@@ -235,6 +235,18 @@ func (s *Service) MarkReady(ctx context.Context, id string) error {
 	return s.advance(ctx, id, StatusInProduction, StatusReady)
 }
 
+// MarkDispatched moves a READY order to OUT_FOR_DELIVERY when the baker
+// dispatches it. Idempotent if already out for delivery.
+func (s *Service) MarkDispatched(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusReady, StatusOutForDelivery)
+}
+
+// MarkDelivered moves an OUT_FOR_DELIVERY order to DELIVERED on confirmed
+// receipt, which issues the balance invoice. Idempotent if already delivered.
+func (s *Service) MarkDelivered(ctx context.Context, id string) error {
+	return s.advance(ctx, id, StatusOutForDelivery, StatusDelivered)
+}
+
 // advance transitions an order from `from` to `to`; a no-op if already at `to`,
 // and a 409 from any other state.
 func (s *Service) advance(ctx context.Context, id, from, to string) error {
