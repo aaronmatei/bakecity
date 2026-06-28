@@ -31,7 +31,7 @@ class ProductDetailScreen extends ConsumerWidget {
             Container(
               height: 200,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant,
+                color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(16),
               ),
               alignment: Alignment.center,

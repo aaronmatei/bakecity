@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../application/orders_controller.dart';
-import '../domain/order.dart';
 
 class OrdersListScreen extends ConsumerWidget {
   const OrdersListScreen({super.key});

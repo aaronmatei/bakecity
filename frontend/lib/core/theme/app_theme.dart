@@ -63,7 +63,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceVariant.withOpacity(0.4),
+        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -73,7 +73,7 @@ class AppTheme {
           vertical: 14,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: colorScheme.surface,
         shape: RoundedRectangleBorder(

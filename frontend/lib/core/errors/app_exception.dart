@@ -20,9 +20,9 @@ class NetworkException extends AppException {
 class ApiException extends AppException {
   const ApiException({
     required this.statusCode,
-    required super.message,
+    required String message,
     this.code,
-  });
+  }) : super(message);
 
   /// HTTP status code.
   final int statusCode;

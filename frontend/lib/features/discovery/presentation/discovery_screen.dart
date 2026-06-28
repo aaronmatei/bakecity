@@ -36,7 +36,7 @@ class DiscoveryScreen extends ConsumerWidget {
             height: 160,
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(16),
             ),
             alignment: Alignment.center,
