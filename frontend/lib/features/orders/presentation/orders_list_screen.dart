@@ -162,10 +162,84 @@ class _OrderCard extends StatelessWidget {
             if (!cancelled) ...[
               const SizedBox(height: Insets.md),
               _LifecycleBar(status: order.status),
+              if (hasPrice) ...[
+                const SizedBox(height: Insets.md),
+                _DepositBalanceRow(order: order),
+              ],
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The agreed price split into deposit + balance, each marked paid or due.
+class _DepositBalanceRow extends StatelessWidget {
+  const _DepositBalanceRow({required this.order});
+  final Order order;
+
+  static const _depositPaidStatuses = {
+    OrderStatus.depositPaid,
+    OrderStatus.inProduction,
+    OrderStatus.ready,
+    OrderStatus.dispatched,
+    OrderStatus.delivered,
+    OrderStatus.completed,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final depositPaid = _depositPaidStatuses.contains(order.status);
+    final balancePaid = order.status == OrderStatus.completed;
+    return Row(
+      children: [
+        Expanded(
+          child: _Leg(
+            label: 'Deposit',
+            cents: order.depositCents,
+            paid: depositPaid,
+          ),
+        ),
+        const SizedBox(width: Insets.md),
+        Expanded(
+          child: _Leg(
+            label: 'Balance',
+            cents: order.balanceCents,
+            paid: balancePaid,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Leg extends StatelessWidget {
+  const _Leg({required this.label, required this.cents, required this.paid});
+  final String label;
+  final int? cents;
+  final bool paid;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final color = paid ? context.bake.success : cs.onSurfaceVariant;
+    final amount = cents != null ? Formatters.currencyFromCents(cents!) : '—';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(paid ? Icons.check_circle : Icons.schedule_outlined,
+            size: 13, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            '$label $amount · ${paid ? 'paid' : 'due'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.tt.bodySmall?.copyWith(color: cs.onSurface),
+          ),
+        ),
+      ],
     );
   }
 }
