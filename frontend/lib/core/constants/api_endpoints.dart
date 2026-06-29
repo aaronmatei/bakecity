@@ -51,6 +51,8 @@ class ApiEndpoints {
 
   // Messaging (per order)
   static String orderMessages(String id) => '/orders/$id/messages';
+  /// Marks the counterparty's messages as read (call when they render on screen).
+  static String orderMessagesRead(String id) => '/orders/$id/messages/read';
 
   // Production timeline (per order) — GET list + POST update share the path
   static String orderProduction(String id) => '/orders/$id/production';

@@ -81,11 +81,23 @@ class _MessagingViewState extends ConsumerState<MessagingView> {
               if (list.isEmpty) {
                 return _EmptyConversation(name: counterparty.name);
               }
-              // Auto-scroll to the newest message after layout.
+              // When new messages render, scroll to them and — if any are
+              // incoming and unread — mark the thread read. Tying this to the
+              // post-frame callback means receipts reflect messages actually on
+              // screen, not just the thread being fetched.
               if (list.length != _lastCount) {
                 _lastCount = list.length;
-                WidgetsBinding.instance
-                    .addPostFrameCallback((_) => _scrollToBottom());
+                final hasUnreadIncoming = myId != null &&
+                    list.any((m) => m.senderId != myId && m.readAt == null);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollToBottom();
+                  if (hasUnreadIncoming) {
+                    ref
+                        .read(messagingControllerProvider)
+                        .markRead(widget.orderId)
+                        .ignore();
+                  }
+                });
               }
               return ListView(
                 controller: _scrollController,

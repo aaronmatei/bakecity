@@ -29,6 +29,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/orders/:id/messages", h.List)
 	rg.POST("/orders/:id/messages", h.Send)
+	rg.POST("/orders/:id/messages/read", h.MarkRead)
 }
 
 func actorFrom(c *gin.Context) Actor {
@@ -69,4 +70,15 @@ func (h *Handler) Send(c *gin.Context) {
 		return
 	}
 	pkg.Created(c, m)
+}
+
+// MarkRead handles POST /orders/:id/messages/read. The caller marks the
+// counterparty's messages in this thread as read — invoked when the messages
+// actually render on the caller's screen, not merely when the thread is listed.
+func (h *Handler) MarkRead(c *gin.Context) {
+	if err := h.svc.MarkRead(c.Request.Context(), actorFrom(c), c.Param("id")); err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, gin.H{"ok": true})
 }

@@ -65,14 +65,29 @@ func (s *Service) List(ctx context.Context, actor Actor, orderID string, limit, 
 	if err != nil {
 		return nil, err
 	}
-	msgs, err := s.repo.List(ctx, threadID, limit, offset)
+	return s.repo.List(ctx, threadID, limit, offset)
+}
+
+// MarkRead stamps the counterparty's messages in an order's thread as read.
+// Unlike List, marking is an explicit action the client invokes once the
+// messages are actually on screen, so read receipts reflect real reads rather
+// than every poll/open. Participants and admins only; no thread yet is a no-op.
+func (s *Service) MarkRead(ctx context.Context, actor Actor, orderID string) error {
+	order, err := s.orders.OrderByID(ctx, orderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// Now that this participant has opened the thread, mark the counterparty's
-	// messages as read (best-effort; a failure shouldn't block the read).
-	_ = s.repo.MarkThreadRead(ctx, threadID, actor.UserID)
-	return msgs, nil
+	if err := s.authorize(ctx, actor, order); err != nil {
+		return err
+	}
+	threadID, err := s.repo.ThreadIDByOrder(ctx, orderID)
+	if errors.Is(err, pkg.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.repo.MarkThreadRead(ctx, threadID, actor.UserID)
 }
 
 // authorize permits the order's customer, its baker, or an admin.

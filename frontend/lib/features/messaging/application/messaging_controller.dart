@@ -43,4 +43,13 @@ class MessagingController {
     );
     return Message.fromJson(response.data!);
   }
+
+  /// Marks the counterparty's messages in this thread as read. Called when the
+  /// thread's messages actually render on screen, so the sender's read receipts
+  /// reflect a real read rather than the thread merely being fetched.
+  Future<void> markRead(String orderId) async {
+    await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.orderMessagesRead(orderId),
+    );
+  }
 }
