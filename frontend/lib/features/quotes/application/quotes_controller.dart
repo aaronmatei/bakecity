@@ -26,23 +26,22 @@ class QuotesController {
 
   final ApiClient _api;
 
-  /// Baker submits a quote for an order.
+  /// Baker proposes a quote for an order. [amount] is the total in KES and
+  /// [depositPct] the deposit percentage (1–100); [validUntil] is optional.
+  /// Matches the backend contract (POST /orders/:id/quotes).
   Future<Quote> submitQuote({
     required String orderId,
-    required int totalCents,
-    required int depositCents,
-    String? notes,
-    int? leadTimeDays,
-    List<QuoteLineItem> lineItems = const [],
+    required double amount,
+    required double depositPct,
+    DateTime? validUntil,
   }) async {
     final response = await _api.post<Map<String, dynamic>>(
       ApiEndpoints.orderQuotes(orderId),
       data: {
-        'total_cents': totalCents,
-        'deposit_cents': depositCents,
-        if (notes != null) 'notes': notes,
-        if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
-        'line_items': lineItems.map((e) => e.toJson()).toList(),
+        'amount': amount,
+        'deposit_pct': depositPct,
+        if (validUntil != null)
+          'valid_until': validUntil.toUtc().toIso8601String(),
       },
     );
     return Quote.fromJson(response.data!);

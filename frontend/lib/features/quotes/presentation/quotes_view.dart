@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../../widgets/app_error_view.dart';
@@ -26,6 +28,49 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
 
   bool get _isCustomer =>
       ref.read(authControllerProvider).user?.isCustomer ?? false;
+
+  bool get _isBaker => ref.read(authControllerProvider).user?.isBaker ?? false;
+
+  /// The baker may quote only while the order is still in negotiation.
+  bool _canQuote(OrderStatus? status) =>
+      _isBaker &&
+      (status == OrderStatus.pendingQuote || status == OrderStatus.quoted);
+
+  Future<void> _openQuoteForm({required bool isUpdate}) async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _QuoteForm(
+          isUpdate: isUpdate,
+          onSubmit: (amount, depositPct, validUntil) async {
+            await ref.read(quotesControllerProvider).submitQuote(
+                  orderId: widget.orderId,
+                  amount: amount,
+                  depositPct: depositPct,
+                  validUntil: validUntil,
+                );
+            ref.invalidate(orderQuotesProvider(widget.orderId));
+            ref.invalidate(orderDetailProvider(widget.orderId));
+          },
+        ),
+      ),
+    );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Quote sent to the customer.')),
+      );
+    }
+  }
+
+  Widget _sendQuoteButton({required bool isUpdate}) {
+    return FilledButton.icon(
+      onPressed: () => _openQuoteForm(isUpdate: isUpdate),
+      icon: const Icon(Icons.request_quote_outlined),
+      label: Text(isUpdate ? 'Send an updated quote' : 'Send a quote'),
+    );
+  }
 
   Future<void> _accept(Quote quote) async {
     final confirmed = await showDialog<bool>(
@@ -81,6 +126,10 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
   @override
   Widget build(BuildContext context) {
     final quotes = ref.watch(orderQuotesProvider(widget.orderId));
+    final orderStatus =
+        ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
+    final canQuote = _canQuote(orderStatus);
+
     return quotes.when(
       loading: () => const LoadingIndicator(),
       error: (e, _) => AppErrorView(
@@ -88,27 +137,46 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
         onRetry: () => ref.invalidate(orderQuotesProvider(widget.orderId)),
       ),
       data: (list) {
+        final anyAccepted = list.any((q) => q.status == QuoteStatus.accepted);
+
         if (list.isEmpty) {
-          return const EmptyState(
-            icon: Icons.request_quote_outlined,
-            message: 'No quotes yet. The baker will send one shortly.',
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (canQuote)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _sendQuoteButton(isUpdate: false),
+                ),
+              const Expanded(
+                child: EmptyState(
+                  icon: Icons.request_quote_outlined,
+                  message: 'No quotes yet. The baker will send one shortly.',
+                ),
+              ),
+            ],
           );
         }
-        final anyAccepted = list.any((q) => q.status == QuoteStatus.accepted);
+
         return RefreshIndicator(
-          onRefresh: () async =>
-              ref.invalidate(orderQuotesProvider(widget.orderId)),
+          onRefresh: () async {
+            ref.invalidate(orderQuotesProvider(widget.orderId));
+            ref.invalidate(orderDetailProvider(widget.orderId));
+          },
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: list.length,
+            itemCount: list.length + (canQuote ? 1 : 0),
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
-              final quote = list[i];
+              if (canQuote && i == 0) {
+                return _sendQuoteButton(isUpdate: true);
+              }
+              final quote = list[i - (canQuote ? 1 : 0)];
               return _QuoteCard(
                 quote: quote,
                 // The newest quote is first; only it is actionable, and only
                 // while nothing else has been accepted yet.
-                isLatest: i == 0,
+                isLatest: quote == list.first,
                 anyAccepted: anyAccepted,
                 isCustomer: _isCustomer,
                 accepting: _acceptingId == quote.id,
@@ -276,6 +344,170 @@ class _Line extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bottom-sheet form the baker uses to propose (or revise) a quote.
+class _QuoteForm extends StatefulWidget {
+  const _QuoteForm({required this.isUpdate, required this.onSubmit});
+
+  final bool isUpdate;
+  final Future<void> Function(
+    double amount,
+    double depositPct,
+    DateTime? validUntil,
+  ) onSubmit;
+
+  @override
+  State<_QuoteForm> createState() => _QuoteFormState();
+}
+
+class _QuoteFormState extends State<_QuoteForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  final _depositPct = TextEditingController(text: '50');
+  DateTime? _validUntil;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _depositPct.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickValidUntil() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _validUntil ?? now.add(const Duration(days: 7)),
+      firstDate: now.add(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 90)),
+      helpText: 'Quote valid until',
+    );
+    if (picked != null) {
+      // Hold the quote open until the end of the chosen day.
+      setState(() =>
+          _validUntil = DateTime(picked.year, picked.month, picked.day, 23, 59));
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit(
+        double.parse(_amount.text.trim()),
+        double.parse(_depositPct.text.trim()),
+        _validUntil,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } on AppException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String? _validateAmount(String? value) {
+    final n = double.tryParse((value ?? '').trim());
+    if (n == null || n <= 0) return 'Enter a total above 0';
+    return null;
+  }
+
+  String? _validatePct(String? value) {
+    final n = double.tryParse((value ?? '').trim());
+    if (n == null || n <= 0 || n > 100) return 'Enter 1–100';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.isUpdate ? 'Send an updated quote' : 'Send a quote',
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'The customer reviews and accepts before paying a deposit.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _amount,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Total price (KES)',
+                  prefixIcon: Icon(Icons.sell_outlined),
+                ),
+                validator: _validateAmount,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _depositPct,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Deposit (%)',
+                  helperText: 'Share due up front to confirm the order',
+                  prefixIcon: Icon(Icons.percent_outlined),
+                ),
+                validator: _validatePct,
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: Text(
+                  _validUntil == null
+                      ? 'Valid until (optional)'
+                      : 'Valid until ${Formatters.eventDate(_validUntil!)}',
+                ),
+                trailing: _validUntil == null
+                    ? const Icon(Icons.chevron_right)
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _validUntil = null),
+                      ),
+                onTap: _pickValidUntil,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _submitting ? null : _submit,
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
+                label: const Text('Send quote'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
