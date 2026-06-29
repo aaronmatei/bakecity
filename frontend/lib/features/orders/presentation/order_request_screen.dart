@@ -27,9 +27,16 @@ class _Reference {
 /// Collects the details for a custom-order request against a product and sends
 /// it to the baker as a quote request (the first step of the escrow lifecycle).
 class OrderRequestScreen extends ConsumerWidget {
-  const OrderRequestScreen({super.key, required this.productId});
+  const OrderRequestScreen({
+    super.key,
+    required this.productId,
+    this.initialSize,
+  });
 
   final String productId;
+
+  /// The size the customer chose on the product detail screen, if any.
+  final String? initialSize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +51,7 @@ class OrderRequestScreen extends ConsumerWidget {
             message: e is AppException ? e.message : e.toString(),
             onRetry: () => ref.invalidate(productDetailProvider(productId)),
           ),
-          data: (p) => _OrderRequestForm(product: p),
+          data: (p) => _OrderRequestForm(product: p, initialSize: initialSize),
         ),
       ),
     );
@@ -52,9 +59,10 @@ class OrderRequestScreen extends ConsumerWidget {
 }
 
 class _OrderRequestForm extends ConsumerStatefulWidget {
-  const _OrderRequestForm({required this.product});
+  const _OrderRequestForm({required this.product, this.initialSize});
 
   final Product product;
+  final String? initialSize;
 
   @override
   ConsumerState<_OrderRequestForm> createState() => _OrderRequestFormState();
@@ -193,6 +201,10 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
       if (v.isNotEmpty) specs[key] = v;
     }
 
+    // The size chosen on the product page (e.g. "1.5kg · serves 12").
+    final size = widget.initialSize?.trim();
+    if (size != null && size.isNotEmpty) specs['size'] = size;
+
     add('servings', _servings);
     add('flavor', _flavor);
     add('message', _message);
@@ -219,8 +231,11 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
                   leading: const Icon(Icons.cake_outlined),
                   title: Text(p.name),
                   subtitle: Text(
-                    'From ${Formatters.currencyFromCents(p.basePriceCents)} • '
-                    'lead time ${p.leadTimeDays} day(s)',
+                    widget.initialSize != null
+                        ? 'Size: ${widget.initialSize} • lead time '
+                            '${p.leadTimeDays} day(s)'
+                        : 'From ${Formatters.currencyFromCents(p.basePriceCents)} • '
+                            'lead time ${p.leadTimeDays} day(s)',
                   ),
                 ),
               ),

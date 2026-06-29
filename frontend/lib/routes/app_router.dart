@@ -173,6 +173,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.productOrderRequestName,
         builder: (context, state) => OrderRequestScreen(
           productId: state.pathParameters['productId']!,
+          initialSize: state.uri.queryParameters['size'],
         ),
       ),
       GoRoute(

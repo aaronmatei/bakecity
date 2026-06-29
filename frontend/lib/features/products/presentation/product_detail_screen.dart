@@ -410,6 +410,9 @@ class _CtaBar extends ConsumerWidget {
                 onPressed: () => context.pushNamed(
                   AppRoutes.productOrderRequestName,
                   pathParameters: {'productId': product.id},
+                  queryParameters: {
+                    if (product.sizes.isNotEmpty) 'size': label,
+                  },
                 ),
                 icon: const Icon(Icons.add_shopping_cart_outlined),
                 label: Text(product.isCustomizable && product.sizes.isEmpty
