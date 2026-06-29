@@ -40,7 +40,11 @@ class _BakerHomeScreenState extends ConsumerState<BakerHomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) async {
+          if (i == 0) return;
           // Sections are pushed (not go) so each keeps a back button to home.
+          // Highlight the tapped tab while its screen is on top, then restore
+          // Dashboard when it's popped, so the bar reflects the current section.
+          setState(() => _index = i);
           switch (i) {
             case 1:
               await context.pushNamed(AppRoutes.ordersName);
