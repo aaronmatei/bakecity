@@ -15,8 +15,13 @@ class OrdersController extends AsyncNotifier<List<Order>> {
   Future<List<Order>> build() => _fetch();
 
   Future<List<Order>> _fetch() async {
-    final response =
-        await _api.get<Map<String, dynamic>>(ApiEndpoints.orders);
+    // role=all returns every order the user is a party to — orders they placed
+    // (as customer) and orders placed with them (as baker). Without it the
+    // backend defaults to customer-only, so bakers see none of their orders.
+    final response = await _api.get<Map<String, dynamic>>(
+      ApiEndpoints.orders,
+      queryParameters: {'role': 'all'},
+    );
     final items = (response.data?['data'] ?? response.data?['orders'] ?? [])
         as List;
     return items
