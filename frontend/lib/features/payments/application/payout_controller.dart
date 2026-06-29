@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/payment_service.dart';
+import '../../auth/application/auth_controller.dart';
 
 /// Loads the baker's balance and drives payout requests.
 final payoutControllerProvider =
@@ -10,7 +11,11 @@ class PayoutController extends AsyncNotifier<BakerBalance> {
   PaymentService get _service => ref.read(paymentServiceProvider);
 
   @override
-  Future<BakerBalance> build() => _service.fetchBalance();
+  Future<BakerBalance> build() {
+    // Reset on account change so one baker never sees another's balance.
+    ref.watch(authControllerProvider.select((s) => s.user?.id));
+    return _service.fetchBalance();
+  }
 
   Future<void> refresh() async {
     state = await AsyncValue.guard(_service.fetchBalance);

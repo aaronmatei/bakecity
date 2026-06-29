@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/api_endpoints.dart';
 import '../../../services/api_client.dart';
+import '../../auth/application/auth_controller.dart';
 import '../domain/order.dart';
 
 /// Loads the current user's orders.
@@ -12,7 +13,13 @@ class OrdersController extends AsyncNotifier<List<Order>> {
   ApiClient get _api => ref.read(apiClientProvider);
 
   @override
-  Future<List<Order>> build() => _fetch();
+  Future<List<Order>> build() {
+    // Rebuild when the signed-in user changes, so a stale cache from a previous
+    // session can never show another account's orders.
+    final userId = ref.watch(authControllerProvider.select((s) => s.user?.id));
+    if (userId == null) return Future.value(const []);
+    return _fetch();
+  }
 
   Future<List<Order>> _fetch() async {
     // role=all returns every order the user is a party to — orders they placed

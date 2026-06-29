@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/baker_service.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../bakers/domain/my_baker_profile.dart';
 
 /// Loads the signed-in baker's profile for the KYC onboarding flow and drives
@@ -14,7 +15,12 @@ class OnboardingController extends AsyncNotifier<MyBakerProfile?> {
   BakerService get _service => ref.read(bakerServiceProvider);
 
   @override
-  Future<MyBakerProfile?> build() => _service.myProfile();
+  Future<MyBakerProfile?> build() {
+    // Reset on account change so one baker never sees another's profile.
+    final userId = ref.watch(authControllerProvider.select((s) => s.user?.id));
+    if (userId == null) return Future.value(null);
+    return _service.myProfile();
+  }
 
   /// Reloads the profile (used to retry after an error).
   Future<void> refresh() async {

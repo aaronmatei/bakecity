@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart'; // tokenStorageProvider
 import '../../../services/notification_service.dart';
 import '../../../services/websocket_service.dart';
+import '../../auth/application/auth_controller.dart';
 import '../domain/notification.dart';
 
 /// Loads the in-app notification feed and keeps it live: it opens the realtime
@@ -17,6 +18,9 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
 
   @override
   Future<List<AppNotification>> build() async {
+    // Reset on account change so notifications never carry over between users.
+    final userId = ref.watch(authControllerProvider.select((s) => s.user?.id));
+    if (userId == null) return const [];
     final token = await ref.read(tokenStorageProvider).readAccessToken();
     if (token != null && token.isNotEmpty) {
       final ws = ref.read(webSocketServiceProvider);
