@@ -42,7 +42,7 @@ class ProfileScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
-            onTap: () => context.goNamed(AppRoutes.notificationsName),
+            onTap: () => context.pushNamed(AppRoutes.notificationsName),
           ),
           if (user?.isBaker ?? false)
             ListTile(
@@ -51,7 +51,7 @@ class ProfileScreen extends ConsumerWidget {
               subtitle: Text(
                 user!.bakerVerified ? 'Verified' : 'Pending',
               ),
-              onTap: () => context.goNamed(AppRoutes.onboardingName),
+              onTap: () => context.pushNamed(AppRoutes.onboardingName),
             ),
           const Divider(),
           ListTile(

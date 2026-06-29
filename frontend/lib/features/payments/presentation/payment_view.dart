@@ -9,6 +9,7 @@ import '../../../services/payment_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../orders/application/orders_controller.dart';
 import '../../orders/domain/order.dart';
 import '../application/payments_controller.dart';
@@ -76,8 +77,13 @@ class _PaymentViewState extends ConsumerState<PaymentView> {
         onRetry: () => ref.invalidate(orderDetailProvider(widget.orderId)),
       ),
       data: (o) {
+        // Only the customer pays. Bakers see a read-only escrow status instead
+        // of payment actions (the backend also rejects baker payments).
+        final isCustomer =
+            ref.watch(authControllerProvider).user?.isCustomer ?? false;
         final depositDue = o.status == OrderStatus.accepted;
         final balanceDue = o.status == OrderStatus.delivered;
+        final canPay = isCustomer && (depositDue || balanceDue);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -88,7 +94,7 @@ class _PaymentViewState extends ConsumerState<PaymentView> {
               children: [
                 _AmountsCard(order: o),
                 const SizedBox(height: 16),
-                if (depositDue || balanceDue) ...[
+                if (canPay) ...[
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
@@ -116,8 +122,10 @@ class _PaymentViewState extends ConsumerState<PaymentView> {
                       isLoading: state.isProcessing,
                       onPressed: () => _pay(controller.payBalance),
                     ),
-                ] else
-                  _StatusNote(status: o.status),
+                ] else if (isCustomer)
+                  _StatusNote(status: o.status)
+                else
+                  _BakerEscrowNote(status: o.status),
               ],
             ),
           ),
@@ -136,6 +144,16 @@ class _AmountsCard extends StatelessWidget {
   const _AmountsCard({required this.order});
 
   final Order order;
+
+  /// The deposit is paid once the order has advanced past acceptance.
+  bool get _depositPaid => const {
+        OrderStatus.depositPaid,
+        OrderStatus.inProduction,
+        OrderStatus.ready,
+        OrderStatus.dispatched,
+        OrderStatus.delivered,
+        OrderStatus.completed,
+      }.contains(order.status);
 
   @override
   Widget build(BuildContext context) {
@@ -159,8 +177,16 @@ class _AmountsCard extends StatelessWidget {
               )
             else ...[
               _AmountRow(label: 'Total', cents: order.totalCents),
-              _AmountRow(label: 'Deposit', cents: order.depositCents),
-              _AmountRow(label: 'Balance', cents: order.balanceCents),
+              _AmountRow(
+                label: 'Deposit',
+                cents: order.depositCents,
+                paid: _depositPaid,
+              ),
+              _AmountRow(
+                label: 'Balance',
+                cents: order.balanceCents,
+                paid: order.status == OrderStatus.completed,
+              ),
             ],
           ],
         ),
@@ -170,24 +196,96 @@ class _AmountsCard extends StatelessWidget {
 }
 
 class _AmountRow extends StatelessWidget {
-  const _AmountRow({required this.label, required this.cents});
+  const _AmountRow({required this.label, required this.cents, this.paid = false});
 
   final String label;
   final int? cents;
+  final bool paid;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label),
-          Text(
-            cents != null ? Formatters.currencyFromCents(cents!) : '—',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (paid) ...[
+                Icon(Icons.check_circle,
+                    size: 16, color: Colors.green.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Paid',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.green.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                cents != null ? Formatters.currencyFromCents(cents!) : '—',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Read-only escrow status shown to the baker (who never pays). Frames the same
+/// order state from the baker's side: what they're waiting on or have earned.
+class _BakerEscrowNote extends StatelessWidget {
+  const _BakerEscrowNote({required this.status});
+
+  final OrderStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (IconData icon, String message) = switch (status) {
+      OrderStatus.draft ||
+      OrderStatus.pendingQuote ||
+      OrderStatus.quoted =>
+        (Icons.request_quote_outlined,
+            'Send a quote and, once the customer accepts, they pay the deposit here.'),
+      OrderStatus.accepted =>
+        (Icons.hourglass_top_outlined,
+            'Quote accepted. Waiting for the customer to pay the deposit.'),
+      OrderStatus.depositPaid ||
+      OrderStatus.inProduction ||
+      OrderStatus.ready ||
+      OrderStatus.dispatched =>
+        (Icons.lock_outline,
+            'Deposit secured in escrow. The balance is released to you after delivery.'),
+      OrderStatus.delivered =>
+        (Icons.hourglass_bottom_outlined,
+            'Delivered. Waiting for the customer to pay the balance.'),
+      OrderStatus.completed =>
+        (Icons.check_circle_outline,
+            'Paid in full. Your funds are available on the Payouts screen.'),
+      OrderStatus.cancelled ||
+      OrderStatus.disputed =>
+        (Icons.info_outline, 'No payment is due on this order.'),
+    };
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(icon, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
       ),
     );
   }

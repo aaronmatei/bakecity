@@ -56,7 +56,7 @@ class OrdersListScreen extends ConsumerWidget {
                     ),
                     trailing: order.status == OrderStatus.completed
                         ? TextButton(
-                            onPressed: () => context.goNamed(
+                            onPressed: () => context.pushNamed(
                               AppRoutes.orderReviewName,
                               pathParameters: {'orderId': order.id},
                             ),
@@ -66,7 +66,7 @@ class OrdersListScreen extends ConsumerWidget {
                             ? Text(
                                 Formatters.currencyFromCents(order.totalCents!))
                             : null),
-                    onTap: () => context.goNamed(
+                    onTap: () => context.pushNamed(
                       AppRoutes.orderDetailName,
                       pathParameters: {'orderId': order.id},
                     ),

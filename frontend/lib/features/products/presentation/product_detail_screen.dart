@@ -82,7 +82,7 @@ class ProductDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => context.goNamed(
+              onPressed: () => context.pushNamed(
                 AppRoutes.bakerReviewsName,
                 pathParameters: {'bakerId': p.bakerId},
               ),
