@@ -19,6 +19,7 @@ class Product {
     this.cakeOccasion,
     this.cakeFlavor,
     this.cakeFormat,
+    this.sizes = const [],
   });
 
   final String id;
@@ -43,6 +44,9 @@ class Product {
   final String? cakeOccasion;
   final String? cakeFlavor;
   final String? cakeFormat;
+
+  /// Weight/serving options with their own prices (cakes are priced by weight).
+  final List<ProductSize> sizes;
 
   /// Discounted price in cents when on offer (else the base price).
   int get effectivePriceCents => isOnOffer && discountPct != null
@@ -81,6 +85,10 @@ class Product {
       cakeOccasion: json['cake_occasion'] as String?,
       cakeFlavor: json['cake_flavor'] as String?,
       cakeFormat: json['cake_format'] as String?,
+      sizes: (json['sizes'] as List?)
+              ?.map((e) => ProductSize.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 
@@ -96,6 +104,34 @@ class Product {
         'is_customizable': isCustomizable,
         'is_available': isAvailable,
       };
+}
+
+/// A weight/serving option for a product, with its own price.
+class ProductSize {
+  const ProductSize({
+    required this.id,
+    required this.label,
+    required this.priceCents,
+    this.weightKg,
+    this.serves,
+  });
+
+  final String id;
+  final String label;
+  final int priceCents;
+  final double? weightKg;
+  final int? serves;
+
+  factory ProductSize.fromJson(Map<String, dynamic> json) {
+    final price = (json['price'] as num?)?.toDouble() ?? 0;
+    return ProductSize(
+      id: json['id'].toString(),
+      label: json['label'] as String? ?? '',
+      priceCents: (price * 100).round(),
+      weightKg: (json['weight_kg'] as num?)?.toDouble(),
+      serves: (json['serves'] as num?)?.toInt(),
+    );
+  }
 }
 
 /// A product category for filtering / discovery.

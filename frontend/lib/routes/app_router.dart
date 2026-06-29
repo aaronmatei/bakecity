@@ -11,6 +11,7 @@ import '../features/auth/presentation/splash_screen.dart';
 import '../features/bakers/presentation/baker_storefront_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
+import '../features/catalog/presentation/catalog_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
@@ -112,6 +113,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.search,
         name: AppRoutes.searchName,
         builder: (context, state) => const SearchScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.catalog,
+        name: AppRoutes.catalogName,
+        builder: (context, state) => CatalogScreen(
+          initialCategory: state.uri.queryParameters['category'],
+          initialSort: state.uri.queryParameters['sort'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.favorites,

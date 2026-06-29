@@ -6,17 +6,28 @@ import (
 
 // Product maps to the products table.
 type Product struct {
-	ID           string    `json:"id"`
-	BakerID      string    `json:"baker_id"`
-	CategoryID   string    `json:"category_id,omitempty"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description,omitempty"`
-	BasePrice    float64   `json:"base_price"`
-	LeadTimeDays int       `json:"lead_time_days"`
-	Active       bool      `json:"active"`
-	ImageURLs    []string  `json:"image_urls,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string        `json:"id"`
+	BakerID      string        `json:"baker_id"`
+	CategoryID   string        `json:"category_id,omitempty"`
+	Title        string        `json:"title"`
+	Description  string        `json:"description,omitempty"`
+	BasePrice    float64       `json:"base_price"`
+	LeadTimeDays int           `json:"lead_time_days"`
+	Active       bool          `json:"active"`
+	ImageURLs    []string      `json:"image_urls,omitempty"`
+	Sizes        []ProductSize `json:"sizes,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+// ProductSize is a weight/serving option with its own price (cakes are priced
+// by weight in KE).
+type ProductSize struct {
+	ID       string   `json:"id"`
+	Label    string   `json:"label"`
+	WeightKg *float64 `json:"weight_kg,omitempty"`
+	Serves   *int     `json:"serves,omitempty"`
+	Price    float64  `json:"price"`
 }
 
 // ProductImage maps to the product_images table.

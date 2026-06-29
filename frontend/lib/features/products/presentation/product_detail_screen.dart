@@ -10,10 +10,30 @@ import '../../../widgets/favorite_heart.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/network_photo.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/rating_pill.dart';
 import '../../bakers/application/baker_storefront_controller.dart';
 import '../../home/widgets/product_card.dart' show productHeroTag;
 import '../application/products_controller.dart';
 import '../domain/product.dart';
+
+/// The chosen size id per product (null = the cheapest/default size).
+final _selectedSizeProvider =
+    StateProvider.autoDispose.family<String?, String>((_, __) => null);
+
+/// The effective price (cents) for the product at the chosen size, applying any
+/// offer discount.
+int _priceForSelection(Product p, String? sizeId) {
+  var cents = p.basePriceCents;
+  if (p.sizes.isNotEmpty) {
+    final s = p.sizes.firstWhere((x) => x.id == sizeId,
+        orElse: () => p.sizes.first);
+    cents = s.priceCents;
+  }
+  if (p.isOnOffer && p.discountPct != null) {
+    return (cents * (100 - p.discountPct!) / 100).round();
+  }
+  return cents;
+}
 
 /// Product detail: a full-bleed hero image under a collapsing app bar, a
 /// rounded content sheet that slides up over it, and a sticky bottom CTA.
@@ -128,6 +148,27 @@ class _Detail extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  if (product.ratingAvg > 0 || product.dietary.isNotEmpty) ...[
+                    const SizedBox(height: Insets.md),
+                    Wrap(
+                      spacing: Insets.sm,
+                      runSpacing: Insets.sm,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (product.ratingAvg > 0)
+                          RatingPill(
+                              rating: product.ratingAvg,
+                              reviewCount: product.ratingCount),
+                        for (final d in product.dietary) _DietChip(label: d),
+                      ],
+                    ),
+                  ],
+                  if (product.sizes.isNotEmpty) ...[
+                    const SizedBox(height: Insets.xl),
+                    Text('Choose a size', style: context.tt.titleLarge),
+                    const SizedBox(height: Insets.md),
+                    _SizePicker(product: product),
+                  ],
                   const SizedBox(height: Insets.xl),
                   _BakerRow(bakerId: product.bakerId),
                   const SizedBox(height: Insets.xl),
@@ -323,14 +364,21 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
-/// Sticky bottom bar with the price and the primary order CTA.
-class _CtaBar extends StatelessWidget {
+/// Sticky bottom bar with the size-aware price and the primary order CTA.
+class _CtaBar extends ConsumerWidget {
   const _CtaBar({required this.product});
   final Product product;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.cs;
+    final sizeId = ref.watch(_selectedSizeProvider(product.id));
+    final price = _priceForSelection(product, sizeId);
+    final label = product.sizes.isNotEmpty
+        ? product.sizes
+            .firstWhere((s) => s.id == sizeId, orElse: () => product.sizes.first)
+            .label
+        : (product.isOnOffer ? 'Offer price' : 'From');
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -346,11 +394,11 @@ class _CtaBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('From',
+                Text(label,
                     style: context.tt.labelSmall
                         ?.copyWith(color: cs.onSurfaceVariant)),
                 Text(
-                  Formatters.currencyFromCents(product.basePriceCents),
+                  Formatters.currencyFromCents(price),
                   style: context.tt.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
@@ -364,12 +412,86 @@ class _CtaBar extends StatelessWidget {
                   pathParameters: {'productId': product.id},
                 ),
                 icon: const Icon(Icons.add_shopping_cart_outlined),
-                label: const Text('Request order'),
+                label: Text(product.isCustomizable && product.sizes.isEmpty
+                    ? 'Request quote'
+                    : 'Request order'),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Selectable weight/serving chips that drive the displayed price.
+class _SizePicker extends ConsumerWidget {
+  const _SizePicker({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = context.cs;
+    final selected =
+        ref.watch(_selectedSizeProvider(product.id)) ?? product.sizes.first.id;
+    return Wrap(
+      spacing: Insets.sm,
+      runSpacing: Insets.sm,
+      children: [
+        for (final s in product.sizes)
+          PressScale(
+            onTap: () => ref
+                .read(_selectedSizeProvider(product.id).notifier)
+                .state = s.id,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Insets.md, vertical: Insets.sm),
+              decoration: BoxDecoration(
+                color: s.id == selected ? cs.primary : cs.surface,
+                borderRadius: Radii.chipBorder,
+                border: Border.all(
+                    color: s.id == selected ? cs.primary : cs.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.label,
+                      style: context.tt.labelLarge?.copyWith(
+                          color: s.id == selected ? cs.onPrimary : cs.onSurface,
+                          fontWeight: FontWeight.w700)),
+                  Text(
+                    '${s.serves != null ? 'Serves ${s.serves} · ' : ''}'
+                    '${Formatters.currencyFromCents(s.priceCents)}',
+                    style: context.tt.bodySmall?.copyWith(
+                        color: s.id == selected
+                            ? cs.onPrimary.withValues(alpha: 0.9)
+                            : cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A dietary tag chip (e.g. "eggless", "gluten free").
+class _DietChip extends StatelessWidget {
+  const _DietChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.bake.success.withValues(alpha: 0.12),
+        borderRadius: Radii.chipBorder,
+      ),
+      child: Text(label.replaceAll('_', ' '),
+          style: context.tt.labelSmall?.copyWith(
+              color: context.bake.success, fontWeight: FontWeight.w700)),
     );
   }
 }

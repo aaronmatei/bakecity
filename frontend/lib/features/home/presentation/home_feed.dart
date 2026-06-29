@@ -422,7 +422,13 @@ class _ProductRail extends ConsumerWidget {
           title: title,
           height: 230,
           itemCount: list.length,
-          onSeeAll: () => context.pushNamed(AppRoutes.discoveryName),
+          onSeeAll: () => context.pushNamed(
+            AppRoutes.catalogName,
+            queryParameters: {
+              if (categorySlug != null) 'category': categorySlug,
+              'sort': variant == _RailVariant.offers ? 'top_rated' : _sort,
+            },
+          ),
           itemBuilder: (context, i) => ProductCard(
             product: list[i],
             rank: variant == _RailVariant.ranked ? i + 1 : null,

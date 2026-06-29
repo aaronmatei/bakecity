@@ -135,7 +135,32 @@ func (r *Repository) GetProduct(ctx context.Context, id string) (*Product, error
 	if err != nil {
 		return nil, err
 	}
+	sizes, err := r.listSizes(ctx, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	p.Sizes = sizes
 	return &p, nil
+}
+
+// listSizes returns a product's weight/serving options, cheapest first.
+func (r *Repository) listSizes(ctx context.Context, productID string) ([]ProductSize, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, label, weight_kg, serves, price FROM product_sizes
+		   WHERE product_id = $1 ORDER BY price`, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]ProductSize, 0)
+	for rows.Next() {
+		var s ProductSize
+		if err := rows.Scan(&s.ID, &s.Label, &s.WeightKg, &s.Serves, &s.Price); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
 }
 
 // ProductOwner returns the (bakerID, ownerUserID) for a product, or ErrNotFound.
