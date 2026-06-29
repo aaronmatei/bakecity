@@ -1,23 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../core/helpers/formatters.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../services/upload_service.dart';
+import '../../../services/websocket_service.dart';
+import '../../../widgets/app_error_view.dart';
+import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/media_thumbnail.dart';
+import '../../../widgets/primary_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../media/application/media_controller.dart';
 import '../../media/domain/order_media.dart';
 import '../../orders/application/orders_controller.dart';
-import '../../../services/upload_service.dart';
-import '../../../widgets/app_error_view.dart';
-import '../../../widgets/empty_state.dart';
-import '../../../widgets/loading_indicator.dart';
-import '../../../widgets/media_thumbnail.dart';
-import '../../../widgets/primary_button.dart';
 import '../application/production_controller.dart';
+import 'production_timeline.dart';
 
-/// Production timeline for an order. The baker posts stage updates; everyone
-/// sees the chronological timeline.
+/// Production view: the customer watches an animated stage timeline come to life
+/// as their cake is made; the baker (only) also gets the update composer.
 class ProductionView extends ConsumerStatefulWidget {
   const ProductionView({super.key, required this.orderId});
 
@@ -34,9 +38,33 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
   bool _submitting = false;
   bool _uploading = false;
   String? _mediaId;
+  StreamSubscription<RealtimeEvent>? _wsSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Live updates: when a production_update for this order arrives over the
+    // websocket, refresh the timeline with a light haptic so the new stage/
+    // media reveals smoothly.
+    _wsSub = ref.read(webSocketServiceProvider).events.listen((e) {
+      if (e.type != 'production_update') return;
+      final oid = (e.payload['order_id'] ??
+              (e.payload['data'] is Map
+                  ? (e.payload['data'] as Map)['order_id']
+                  : null))
+          ?.toString();
+      if (oid != null && oid != widget.orderId) return;
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      ref.invalidate(orderProductionProvider(widget.orderId));
+      ref.invalidate(orderMediaProvider(widget.orderId));
+      ref.invalidate(orderDetailProvider(widget.orderId));
+    });
+  }
 
   @override
   void dispose() {
+    _wsSub?.cancel();
     _stageController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -46,7 +74,8 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
     final stage = _stageController.text.trim();
     final messenger = ScaffoldMessenger.of(context);
     if (stage.isEmpty) {
-      messenger.showSnackBar(const SnackBar(content: Text('Enter a stage name.')));
+      messenger
+          .showSnackBar(const SnackBar(content: Text('Enter a stage name.')));
       return;
     }
     setState(() => _submitting = true);
@@ -84,7 +113,8 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
       if (mediaId != null) {
         setState(() => _mediaId = mediaId);
         ref.invalidate(orderMediaProvider(widget.orderId));
-        messenger.showSnackBar(const SnackBar(content: Text('Photo attached.')));
+        messenger
+            .showSnackBar(const SnackBar(content: Text('Photo attached.')));
       }
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -98,82 +128,81 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
     final updates = ref.watch(orderProductionProvider(widget.orderId));
     final isBaker =
         ref.watch(authControllerProvider).user?.role == UserRole.baker;
-    final orderStatus =
+    final status =
         ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
     final media = ref.watch(orderMediaProvider(widget.orderId)).valueOrNull ??
         const <OrderMedia>[];
-    // The backend accepts production updates only while DEPOSIT_PAID (starts
-    // production) or IN_PRODUCTION.
     final canPost = isBaker &&
-        (orderStatus == OrderStatus.depositPaid ||
-            orderStatus == OrderStatus.inProduction);
+        (status == OrderStatus.depositPaid ||
+            status == OrderStatus.inProduction);
 
     final references =
         media.where((m) => m.kind == MediaKind.reference).toList();
-    // Map each production photo by its media id so updates can show their image.
-    final productionPhotos = {
-      for (final m in media)
-        if (m.kind == MediaKind.production) m.id: m,
-    };
+    final productionMedia =
+        media.where((m) => m.kind == MediaKind.production).toList();
 
-    return Column(
-      children: [
-        if (isBaker && orderStatus != null)
-          _ProductionBanner(status: orderStatus),
-        if (references.isNotEmpty) _ReferenceStrip(references: references),
-        Expanded(
-          child: updates.when(
-            loading: () => const LoadingIndicator(),
-            error: (e, _) => AppErrorView(
-              message: e.toString(),
-              onRetry: () =>
-                  ref.invalidate(orderProductionProvider(widget.orderId)),
-            ),
-            data: (items) {
-              if (items.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.timeline_outlined,
-                  message: 'Production has not started yet.',
-                );
-              }
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: items.length,
-                itemBuilder: (context, i) {
-                  final u = items[i];
-                  final hasNotes = u.notes != null && u.notes!.isNotEmpty;
-                  final photo = u.mediaId == null
-                      ? null
-                      : productionPhotos[u.mediaId];
-                  return ListTile(
-                    leading: CircleAvatar(child: Text('${u.progressPct}%')),
-                    title: Text(u.stage),
-                    subtitle: Text(
-                      [
-                        if (hasNotes) u.notes!,
-                        Formatters.relativeTime(u.createdAt),
-                      ].join('\n'),
-                    ),
-                    isThreeLine: hasNotes,
-                    trailing: photo != null
-                        ? MediaThumbnail(url: photo.displayUrl, size: 56)
-                        : null,
-                  );
+    return updates.when(
+      loading: () => const LoadingIndicator(),
+      error: (e, _) => AppErrorView(
+        message: e.toString(),
+        onRetry: () =>
+            ref.invalidate(orderProductionProvider(widget.orderId)),
+      ),
+      data: (items) {
+        final showTimeline = items.isNotEmpty || _productionStarted(status);
+        return Column(
+          children: [
+            Expanded(
+              child: RefreshIndicator(
+                color: context.cs.primary,
+                onRefresh: () async {
+                  ref.invalidate(orderProductionProvider(widget.orderId));
+                  ref.invalidate(orderMediaProvider(widget.orderId));
+                  ref.invalidate(orderDetailProvider(widget.orderId));
                 },
-              );
-            },
-          ),
-        ),
-        if (canPost) _composer(),
-      ],
+                child: ListView(
+                  padding: const EdgeInsets.all(Insets.screenH),
+                  children: [
+                    if (references.isNotEmpty) ...[
+                      _ReferenceStrip(references: references),
+                      const SizedBox(height: Insets.xl),
+                    ],
+                    if (showTimeline)
+                      ProductionTimeline(
+                        updates: items,
+                        status: status,
+                        productionMedia: productionMedia,
+                      )
+                    else
+                      _PreProduction(status: status),
+                  ],
+                ),
+              ),
+            ),
+            if (canPost) _composer(),
+          ],
+        );
+      },
     );
   }
+
+  static bool _productionStarted(OrderStatus? s) =>
+      s == OrderStatus.depositPaid ||
+      s == OrderStatus.inProduction ||
+      s == OrderStatus.ready ||
+      s == OrderStatus.dispatched ||
+      s == OrderStatus.delivered ||
+      s == OrderStatus.completed;
 
   Widget _composer() {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(Insets.lg),
+        decoration: BoxDecoration(
+          color: context.cs.surface,
+          border: Border(top: BorderSide(color: context.cs.outlineVariant)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -183,7 +212,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                 labelText: 'Stage (e.g. Baking, Decorating)',
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: Insets.sm),
             TextField(
               controller: _notesController,
               decoration: const InputDecoration(labelText: 'Notes (optional)'),
@@ -209,9 +238,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   'Posting at 100% marks the order ready for delivery.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                  style: context.tt.bodySmall?.copyWith(color: context.cs.primary),
                 ),
               ),
             OutlinedButton.icon(
@@ -227,7 +254,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                       : Icons.check_circle_outline),
               label: Text(_mediaId == null ? 'Attach photo' : 'Photo attached'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: Insets.sm),
             PrimaryButton(
               label: 'Post update',
               icon: Icons.add_outlined,
@@ -241,8 +268,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
   }
 }
 
-/// A horizontal strip of the customer's reference photos, shown above the
-/// timeline so the baker can see what to make.
+/// A horizontal strip of the customer's reference photos.
 class _ReferenceStrip extends StatelessWidget {
   const _ReferenceStrip({required this.references});
 
@@ -250,79 +276,54 @@ class _ReferenceStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Reference photos', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 72,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: references.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, i) =>
-                  MediaThumbnail(url: references[i].displayUrl, size: 72),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Reference photos', style: context.tt.titleSmall),
+        const SizedBox(height: Insets.sm),
+        SizedBox(
+          height: 72,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: references.length,
+            separatorBuilder: (_, __) => const SizedBox(width: Insets.sm),
+            itemBuilder: (context, i) =>
+                MediaThumbnail(url: references[i].displayUrl, size: 72),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// A contextual banner telling the baker where the order stands and what to do
-/// next in the production flow.
-class _ProductionBanner extends StatelessWidget {
-  const _ProductionBanner({required this.status});
-
-  final OrderStatus status;
+/// Shown before production can begin (deposit not yet paid).
+class _PreProduction extends StatelessWidget {
+  const _PreProduction({required this.status});
+  final OrderStatus? status;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (IconData icon, String message) = switch (status) {
-      OrderStatus.draft ||
-      OrderStatus.pendingQuote ||
-      OrderStatus.quoted ||
-      OrderStatus.accepted =>
-        (Icons.payments_outlined,
-            'Production starts once the customer pays the deposit.'),
-      OrderStatus.depositPaid => (
-          Icons.play_circle_outline,
-          'Deposit received — post your first update to start production.'
-        ),
-      OrderStatus.inProduction => (
-          Icons.timelapse_outlined,
-          'In production. Post updates, and set 100% when it’s ready.'
-        ),
-      OrderStatus.ready => (
-          Icons.check_circle_outline,
-          'Production complete. Dispatch from the Delivery tab.'
-        ),
-      OrderStatus.dispatched =>
-        (Icons.local_shipping_outlined, 'Out for delivery.'),
-      OrderStatus.delivered => (Icons.done_all, 'Delivered.'),
-      OrderStatus.completed =>
-        (Icons.verified_outlined, 'Order completed.'),
-      OrderStatus.cancelled ||
-      OrderStatus.disputed =>
-        (Icons.block_outlined, 'No production updates for this order.'),
-    };
-
+    final cs = context.cs;
     return Container(
-      width: double.infinity,
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+      margin: const EdgeInsets.only(top: Insets.xxl),
+      padding: const EdgeInsets.all(Insets.xl),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: Radii.cardBorder,
+      ),
+      child: Column(
         children: [
-          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(message, style: theme.textTheme.bodyMedium),
+          Icon(Icons.bakery_dining_outlined,
+              size: 40, color: cs.onSurfaceVariant),
+          const SizedBox(height: Insets.md),
+          Text('Production hasn\'t started yet',
+              style: context.tt.titleMedium, textAlign: TextAlign.center),
+          const SizedBox(height: Insets.sm),
+          Text(
+            'Once your deposit is paid, you\'ll watch every stage of your cake '
+            'come to life here — live.',
+            textAlign: TextAlign.center,
+            style: context.tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
       ),
