@@ -44,7 +44,10 @@ class RatingsScreen extends ConsumerWidget {
               itemBuilder: (context, i) {
                 if (i == 0) {
                   return _SummaryCard(
-                      average: data.averageRating, count: data.count);
+                    average: data.averageRating,
+                    count: data.count,
+                    distribution: data.distribution,
+                  );
                 }
                 return _ReviewCard(review: data.reviews[i - 1]);
               },
@@ -57,9 +60,14 @@ class RatingsScreen extends ConsumerWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.average, required this.count});
+  const _SummaryCard({
+    required this.average,
+    required this.count,
+    required this.distribution,
+  });
   final double average;
   final int count;
+  final List<int> distribution;
 
   @override
   Widget build(BuildContext context) {
@@ -72,20 +80,81 @@ class _SummaryCard extends StatelessWidget {
         boxShadow: context.bake.cardShadow,
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(average.toStringAsFixed(1),
-              style: context.tt.displaySmall
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(width: Insets.lg),
           Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stars(rating: average.round(), size: 20),
+              Text(average.toStringAsFixed(1),
+                  style: context.tt.displaySmall
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              Stars(rating: average.round(), size: 18),
               const SizedBox(height: Insets.xs),
               Text('$count review${count == 1 ? '' : 's'}',
-                  style: context.tt.bodyMedium
+                  style: context.tt.bodySmall
                       ?.copyWith(color: cs.onSurfaceVariant)),
             ],
+          ),
+          const SizedBox(width: Insets.xl),
+          // Per-star distribution bars (5★ at top).
+          Expanded(
+            child: Column(
+              children: [
+                for (var star = 5; star >= 1; star--)
+                  _DistRow(
+                    star: star,
+                    n: distribution[star - 1],
+                    total: count,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row of the rating histogram: "5 ★ ▓▓▓░░ 12".
+class _DistRow extends StatelessWidget {
+  const _DistRow({required this.star, required this.n, required this.total});
+  final int star;
+  final int n;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final fraction = total == 0 ? 0.0 : n / total;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 10,
+            child: Text('$star',
+                textAlign: TextAlign.end, style: context.tt.bodySmall),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.star_rounded, size: 12, color: context.bake.star),
+          const SizedBox(width: Insets.sm),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 6,
+                backgroundColor: cs.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation(context.bake.star),
+              ),
+            ),
+          ),
+          const SizedBox(width: Insets.sm),
+          SizedBox(
+            width: 22,
+            child: Text('$n',
+                textAlign: TextAlign.end,
+                style: context.tt.bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant)),
           ),
         ],
       ),
@@ -112,16 +181,38 @@ class _ReviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: cs.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.person_outline, size: 18, color: cs.primary),
+              ),
+              const SizedBox(width: Insets.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Verified customer',
+                            style: context.tt.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 4),
+                        Icon(Icons.verified,
+                            size: 14, color: context.bake.success),
+                      ],
+                    ),
+                    Text(Formatters.relativeTime(review.createdAt),
+                        style: context.tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                  ],
+                ),
+              ),
               Stars(rating: review.rating, size: 16),
-              Text(Formatters.relativeTime(review.createdAt),
-                  style: context.tt.bodySmall
-                      ?.copyWith(color: cs.onSurfaceVariant)),
             ],
           ),
           if (hasComment) ...[
-            const SizedBox(height: Insets.sm),
+            const SizedBox(height: Insets.md),
             Text(review.comment!, style: context.tt.bodyMedium),
           ],
         ],
