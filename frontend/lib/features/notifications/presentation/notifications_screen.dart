@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/helpers/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
@@ -52,7 +54,18 @@ class NotificationsScreen extends ConsumerWidget {
                   type: n.type,
                   unread: !n.read,
                   time: Formatters.relativeTime(n.createdAt),
-                  onTap: n.read ? null : () => controller.markRead(n.id),
+                  onTap: () {
+                    if (!n.read) controller.markRead(n.id);
+                    final orderId = n.payload['order_id']?.toString();
+                    if (orderId != null && orderId.isNotEmpty) {
+                      context.pushNamed(
+                        AppRoutes.orderDetailName,
+                        pathParameters: {'orderId': orderId},
+                      );
+                    } else if (n.type == 'payout_sent') {
+                      context.pushNamed(AppRoutes.payoutsName);
+                    }
+                  },
                 );
               },
             ),

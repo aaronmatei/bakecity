@@ -40,6 +40,8 @@ services:
       DATABASE_URL: postgres://bakecity:bakecity_dev@postgres:5432/bakecity?sslmode=disable
       REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-only-change-me-9f3c1a
+      # Device-reachable URL used to build local media blob URLs (no S3 in dev).
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://192.168.100.39:8090}
       # Object storage (Cloudflare R2 / S3). Set these in a repo-root .env file;
       # when the keys are blank the API falls back to a no-op stub presigner.
       S3_ENDPOINT: ${S3_ENDPOINT:-}

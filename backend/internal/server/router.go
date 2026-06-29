@@ -93,6 +93,11 @@ func New(deps Deps) *gin.Engine {
 			deps.Cfg.AWSEndpoint, deps.Cfg.AWSRegion, deps.Cfg.AWSBucket,
 			deps.Cfg.AWSAccessKeyID, deps.Cfg.AWSSecretAccessKey,
 		)
+	} else if deps.DB != nil {
+		// No S3 configured: store and serve media bytes from the API itself so
+		// the upload flow works in development. Blob routes are public.
+		presigner = storage.NewLocalPresigner(deps.Cfg.PublicBaseURL)
+		media.NewBlobStore(deps.DB).RegisterRoutes(r)
 	} else {
 		presigner = storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
 	}

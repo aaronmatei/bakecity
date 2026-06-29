@@ -33,6 +33,18 @@ extension BakeStageUi on BakeStage {
         BakeStage.packaging => Icons.inventory_2_outlined,
         BakeStage.ready => Icons.check_circle_outline,
       };
+
+  /// A representative completion percentage for this stage, used so the progress
+  /// ring still advances when a baker posts a stage name without moving the
+  /// percentage slider (the common case).
+  int get baselinePct => switch (this) {
+        BakeStage.ingredients => 10,
+        BakeStage.preparation => 30,
+        BakeStage.baking => 55,
+        BakeStage.decoration => 75,
+        BakeStage.packaging => 90,
+        BakeStage.ready => 100,
+      };
 }
 
 /// Classifies a free-form baker stage string, falling back to progress %.
@@ -90,13 +102,21 @@ class ProductionTimeline extends StatelessWidget {
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final latest = sorted.isNotEmpty ? sorted.last : null;
     final started = sorted.isNotEmpty || status == OrderStatus.inProduction;
-    final pct = _complete ? 100 : (latest?.progressPct ?? 0);
 
     final current = _complete
         ? BakeStage.ready
         : (latest != null
             ? classifyStage(latest.stage, latest.progressPct)
             : BakeStage.ingredients);
+
+    // The ring reflects the explicit progress %, but never less than the
+    // current stage's baseline — so a baker who posts "Decoration" without
+    // touching the slider still shows meaningful progress instead of 0%.
+    final pct = _complete
+        ? 100
+        : (started
+            ? math.max(latest?.progressPct ?? 0, current.baselinePct)
+            : 0);
     final currentIndex = current.index;
 
     // Latest update mapped to each stage, for completed-stage timestamps.

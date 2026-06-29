@@ -12,6 +12,10 @@ type Config struct {
 	Port string
 	Env  string
 
+	// PublicBaseURL is the device-reachable base URL of this API, used to build
+	// local media blob URLs when no S3 is configured (e.g. http://host:8090).
+	PublicBaseURL string
+
 	DatabaseURL string
 	RedisURL    string
 
@@ -51,6 +55,8 @@ func Load() *Config {
 	return &Config{
 		Port: getEnv("PORT", "8080"),
 		Env:  getEnv("ENV", "development"),
+
+		PublicBaseURL: getEnv("PUBLIC_BASE_URL", "http://localhost:8090"),
 
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/bakecity?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
