@@ -58,6 +58,24 @@ type ListFilter struct {
 	Offset int
 }
 
+// ProductPerf is one product's sales performance for a baker.
+type ProductPerf struct {
+	ProductID  string  `json:"product_id"`
+	Title      string  `json:"title"`
+	OrderCount int     `json:"order_count"`
+	Revenue    float64 `json:"revenue"`
+}
+
+// BakerInsights summarizes a baker's order book: counts by status, completed
+// revenue (gross and net of commission), and the top products.
+type BakerInsights struct {
+	StatusCounts    map[string]int `json:"status_counts"`
+	CompletedOrders int            `json:"completed_orders"`
+	GrossRevenue    float64        `json:"gross_revenue"`
+	NetRevenue      float64        `json:"net_revenue"`
+	TopProducts     []ProductPerf  `json:"top_products"`
+}
+
 // bakerScheduling holds the fields needed to validate fulfillment of an order.
 type bakerScheduling struct {
 	UserID        string

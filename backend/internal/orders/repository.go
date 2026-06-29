@@ -186,6 +186,63 @@ func (r *Repository) BakerIDForUser(ctx context.Context, userID string) (string,
 	return id, err
 }
 
+// BakerInsights aggregates a baker's order book: counts by status, completed
+// revenue (gross and net of commission), and the top 5 products by orders.
+func (r *Repository) BakerInsights(ctx context.Context, bakerID string) (*BakerInsights, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	out := &BakerInsights{StatusCounts: map[string]int{}, TopProducts: []ProductPerf{}}
+
+	rows, err := r.db.Query(ctx,
+		`SELECT status, COUNT(*) FROM orders WHERE baker_id = $1 GROUP BY status`, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var s string
+		var n int
+		if err := rows.Scan(&s, &n); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out.StatusCounts[s] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*), COALESCE(SUM(total_amount), 0),
+		        COALESCE(SUM(total_amount - commission_amount), 0)
+		   FROM orders WHERE baker_id = $1 AND status = 'COMPLETED'`,
+		bakerID,
+	).Scan(&out.CompletedOrders, &out.GrossRevenue, &out.NetRevenue); err != nil {
+		return nil, err
+	}
+
+	prows, err := r.db.Query(ctx,
+		`SELECT o.product_id, p.title, COUNT(*), COALESCE(SUM(o.total_amount), 0)
+		   FROM orders o JOIN products p ON p.id = o.product_id
+		  WHERE o.baker_id = $1
+		  GROUP BY o.product_id, p.title
+		  ORDER BY COUNT(*) DESC, SUM(o.total_amount) DESC
+		  LIMIT 5`, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	defer prows.Close()
+	for prows.Next() {
+		var p ProductPerf
+		if err := prows.Scan(&p.ProductID, &p.Title, &p.OrderCount, &p.Revenue); err != nil {
+			return nil, err
+		}
+		out.TopProducts = append(out.TopProducts, p)
+	}
+	return out, prows.Err()
+}
+
 // BakerScheduling returns the scheduling-relevant fields of a baker profile.
 func (r *Repository) BakerScheduling(ctx context.Context, bakerID string) (*bakerScheduling, error) {
 	if r.db == nil {

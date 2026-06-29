@@ -31,6 +31,18 @@ func NewService(repo *Repository, ledgerSvc *ledger.Service, notifySvc *notifica
 	return &Service{repo: repo, ledger: ledgerSvc, notify: notifySvc, now: time.Now}
 }
 
+// BakerInsights returns the signed-in baker's order-book summary.
+func (s *Service) BakerInsights(ctx context.Context, actor Actor) (*BakerInsights, error) {
+	bakerID, err := s.repo.BakerIDForUser(ctx, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if bakerID == "" {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "you must have a baker profile")
+	}
+	return s.repo.BakerInsights(ctx, bakerID)
+}
+
 // Create validates fulfillment and creates an order in QUOTE_REQUESTED.
 func (s *Service) Create(ctx context.Context, customerID string, req CreateOrderRequest) (*Order, error) {
 	eventDate, err := time.Parse("2006-01-02", req.EventDate)

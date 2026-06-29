@@ -29,8 +29,19 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/orders", h.Create)
 	rg.GET("/orders", h.List)
+	rg.GET("/orders/insights", h.Insights)
 	rg.GET("/orders/:id", h.Get)
 	rg.POST("/orders/:id/cancel", h.Cancel)
+}
+
+// Insights handles GET /orders/insights (the signed-in baker's summary).
+func (h *Handler) Insights(c *gin.Context) {
+	res, err := h.svc.BakerInsights(c.Request.Context(), actorFrom(c))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, res)
 }
 
 func actorFrom(c *gin.Context) Actor {
