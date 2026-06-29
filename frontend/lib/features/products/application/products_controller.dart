@@ -167,13 +167,21 @@ class CatalogController {
   CatalogController(this._ref);
   final Ref _ref;
 
-  /// Creates a product for the signed-in baker.
+  /// Creates a product for the signed-in baker. [sizes] is a list of
+  /// `{label, weight_kg?, serves?, price}` maps (price in KES).
   Future<void> createProduct({
     required String title,
     String? categoryId,
     String? description,
     required int basePriceCents,
     int? leadTimeDays,
+    List<String> dietary = const [],
+    bool isOnOffer = false,
+    int? discountPct,
+    String? cakeOccasion,
+    String? cakeFlavor,
+    String? cakeFormat,
+    List<Map<String, dynamic>> sizes = const [],
   }) async {
     await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
       ApiEndpoints.products,
@@ -184,11 +192,19 @@ class CatalogController {
           'description': description,
         'base_price': basePriceCents / 100,
         if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
+        'dietary': dietary,
+        'is_on_offer': isOnOffer,
+        if (discountPct != null) 'discount_pct': discountPct,
+        if (cakeOccasion != null) 'cake_occasion': cakeOccasion,
+        if (cakeFlavor != null) 'cake_flavor': cakeFlavor,
+        if (cakeFormat != null) 'cake_format': cakeFormat,
+        'sizes': sizes,
       },
     );
   }
 
-  /// Patches a product (owner-only on the backend). Pass only what changes.
+  /// Patches a product (owner-only on the backend). Pass only what changes;
+  /// a non-null [sizes] replaces the product's size set.
   Future<void> updateProduct(
     String id, {
     bool? active,
@@ -197,6 +213,13 @@ class CatalogController {
     String? description,
     String? categoryId,
     int? leadTimeDays,
+    List<String>? dietary,
+    bool? isOnOffer,
+    int? discountPct,
+    String? cakeOccasion,
+    String? cakeFlavor,
+    String? cakeFormat,
+    List<Map<String, dynamic>>? sizes,
   }) async {
     await _ref.read(apiClientProvider).patch<Map<String, dynamic>>(
       ApiEndpoints.product(id),
@@ -207,6 +230,13 @@ class CatalogController {
         if (description != null) 'description': description,
         if (categoryId != null) 'category_id': categoryId,
         if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
+        if (dietary != null) 'dietary': dietary,
+        if (isOnOffer != null) 'is_on_offer': isOnOffer,
+        if (discountPct != null) 'discount_pct': discountPct,
+        if (cakeOccasion != null) 'cake_occasion': cakeOccasion,
+        if (cakeFlavor != null) 'cake_flavor': cakeFlavor,
+        if (cakeFormat != null) 'cake_format': cakeFormat,
+        if (sizes != null) 'sizes': sizes,
       },
     );
   }
