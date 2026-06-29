@@ -57,6 +57,40 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Media, error) {
 	return scanMedia(r.db.QueryRow(ctx, `SELECT `+mediaColumns+` FROM media WHERE id = $1`, id))
 }
 
+// ListByOrder returns an order's media, newest first. When kind is non-empty it
+// is filtered to that purpose (e.g. "reference"). Only uploaded media is
+// returned — pending records whose upload never completed are excluded.
+func (r *Repository) ListByOrder(ctx context.Context, orderID, kind string) ([]Media, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	q := `SELECT ` + mediaColumns + ` FROM media
+	      WHERE order_id = $1 AND status = $2`
+	args := []any{orderID, StatusUploaded}
+	if kind != "" {
+		q += ` AND kind = $3`
+		args = append(args, kind)
+	}
+	q += ` ORDER BY created_at DESC, id DESC`
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Media, 0)
+	for rows.Next() {
+		var m Media
+		if err := rows.Scan(&m.ID, &m.OrderID, &m.OwnerID, &m.Kind, &m.S3Key,
+			&m.ThumbKey, &m.Status, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // SetStatus updates a media record's lifecycle status.
 func (r *Repository) SetStatus(ctx context.Context, id, status string) error {
 	if r.db == nil {

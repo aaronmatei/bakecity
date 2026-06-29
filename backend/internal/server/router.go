@@ -95,7 +95,7 @@ func New(deps Deps) *gin.Engine {
 	quotesSvc := quotes.NewService(quotesRepo, ordersSvc, notificationsSvc)
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
 	productionSvc := production.NewService(productionRepo, ordersSvc, notificationsSvc)
-	mediaSvc := media.NewService(mediaRepo, presigner)
+	mediaSvc := media.NewService(mediaRepo, presigner, ordersSvc)
 	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc, notificationsSvc)
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc, notificationsSvc)
 	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc, notificationsSvc)

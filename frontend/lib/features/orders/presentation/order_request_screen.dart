@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,12 +8,21 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../../core/helpers/validators.dart';
 import '../../../routes/app_routes.dart';
+import '../../../services/upload_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
 import '../../products/application/products_controller.dart';
 import '../../products/domain/product.dart';
 import '../application/orders_controller.dart';
+
+/// An image the customer picked to attach as a design reference. Bytes are held
+/// in memory for the preview, then uploaded once the order exists.
+class _Reference {
+  const _Reference({required this.bytes, required this.contentType});
+  final Uint8List bytes;
+  final String contentType;
+}
 
 /// Collects the details for a custom-order request against a product and sends
 /// it to the baker as a quote request (the first step of the escrow lifecycle).
@@ -57,8 +68,12 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
   final _notes = TextEditingController();
   final _address = TextEditingController();
 
+  final List<_Reference> _references = [];
+  static const int _maxReferences = 5;
+
   DateTime? _eventDate;
   bool _submitting = false;
+  bool _pickingPhoto = false;
 
   /// The earliest date the baker could fulfil, given the product's lead time.
   DateTime get _earliestDate =>
@@ -86,6 +101,25 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
     if (picked != null) setState(() => _eventDate = picked);
   }
 
+  Future<void> _addPhoto() async {
+    if (_references.length >= _maxReferences) return;
+    setState(() => _pickingPhoto = true);
+    try {
+      final file = await ref.read(uploadServiceProvider).pickImage();
+      if (file != null) {
+        final bytes = await file.readAsBytes();
+        setState(() {
+          _references.add(_Reference(
+            bytes: bytes,
+            contentType: file.mimeType ?? 'image/jpeg',
+          ));
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _pickingPhoto = false);
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_eventDate == null) {
@@ -104,9 +138,18 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
             deliveryAddress: _address.text.trim(),
             specs: _buildSpecs(),
           );
+      // Attach reference photos to the new order. Best-effort: the order is
+      // already placed, so a failed upload must not block the customer.
+      final failedUploads = await _uploadReferences(order.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request sent — the baker will quote you.')),
+        SnackBar(
+          content: Text(
+            failedUploads == 0
+                ? 'Request sent — the baker will quote you.'
+                : 'Request sent. $failedUploads photo(s) couldn’t upload.',
+          ),
+        ),
       );
       // Replace so the back button returns to the product, not this form.
       context.pushReplacementNamed(
@@ -121,6 +164,25 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Uploads the picked references against the order; returns how many failed.
+  Future<int> _uploadReferences(String orderId) async {
+    final uploader = ref.read(uploadServiceProvider);
+    var failed = 0;
+    for (final reference in _references) {
+      try {
+        await uploader.uploadBytes(
+          bytes: reference.bytes,
+          contentType: reference.contentType,
+          kind: MediaKind.reference,
+          orderId: orderId,
+        );
+      } catch (_) {
+        failed++;
+      }
+    }
+    return failed;
   }
 
   /// Collects the non-empty custom fields into the backend's key/value specs.
@@ -220,6 +282,39 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
                   alignLabelWithHint: true,
                 ),
               ),
+              const SizedBox(height: 20),
+              Text('Reference photos (optional)',
+                  style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(
+                'Share inspiration so the baker can match your vision.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _references.length +
+                      (_references.length < _maxReferences ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) {
+                    if (i == _references.length) {
+                      return _AddPhotoButton(
+                        busy: _pickingPhoto,
+                        onTap: _pickingPhoto ? null : _addPhoto,
+                      );
+                    }
+                    return _ReferenceThumb(
+                      bytes: _references[i].bytes,
+                      onRemove: () =>
+                          setState(() => _references.removeAt(i)),
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _address,
@@ -242,6 +337,84 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A reference image preview with a remove button.
+class _ReferenceThumb extends StatelessWidget {
+  const _ReferenceThumb({required this.bytes, required this.onRemove});
+
+  final Uint8List bytes;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            bytes,
+            width: 96,
+            height: 96,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          top: 2,
+          right: 2,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: const CircleAvatar(
+              radius: 12,
+              backgroundColor: Colors.black54,
+              child: Icon(Icons.close, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The "add a reference photo" tile.
+class _AddPhotoButton extends StatelessWidget {
+  const _AddPhotoButton({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 96,
+        height: 96,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outline),
+        ),
+        alignment: Alignment.center,
+        child: busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_a_photo_outlined,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(height: 4),
+                  Text('Add', style: theme.textTheme.bodySmall),
+                ],
+              ),
       ),
     );
   }

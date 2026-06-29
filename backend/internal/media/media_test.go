@@ -29,7 +29,7 @@ func TestExtensionFor(t *testing.T) {
 // TestPresignValidation covers the request-validation branches that reject
 // before any database access (so a nil-db repository is never reached).
 func TestPresignValidation(t *testing.T) {
-	svc := NewService(NewRepository(nil), storage.NewStubPresigner("b", "r"))
+	svc := NewService(NewRepository(nil), storage.NewStubPresigner("b", "r"), nil)
 	ctx := context.Background()
 
 	cases := []struct {

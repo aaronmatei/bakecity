@@ -79,6 +79,9 @@ class ApiEndpoints {
   static const String mediaPresign = '/media/presign';
   static String mediaComplete(String id) => '/media/$id/complete';
 
+  /// Media attached to an order (e.g. `?kind=reference`).
+  static String orderMedia(String id) => '/orders/$id/media';
+
   // ---- Reviews / ratings ----
   static const String reviews = '/reviews';
   static String orderReview(String id) => '/orders/$id/review';

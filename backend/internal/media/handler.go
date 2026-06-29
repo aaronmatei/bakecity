@@ -23,6 +23,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/media/presign", h.Presign)
 	rg.POST("/media/:id/complete", h.Complete)
+	rg.GET("/orders/:id/media", h.ListForOrder)
 }
 
 func actorFrom(c *gin.Context) Actor {
@@ -55,4 +56,15 @@ func (h *Handler) Complete(c *gin.Context) {
 		return
 	}
 	pkg.OK(c, m)
+}
+
+// ListForOrder handles GET /orders/:id/media (?kind=reference) — the media
+// attached to an order, for a participant.
+func (h *Handler) ListForOrder(c *gin.Context) {
+	items, err := h.svc.ListForOrder(c.Request.Context(), actorFrom(c), c.Param("id"), c.Query("kind"))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, gin.H{"media": items})
 }
