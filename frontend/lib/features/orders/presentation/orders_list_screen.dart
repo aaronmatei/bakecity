@@ -74,6 +74,8 @@ class _OrderCard extends StatelessWidget {
         : null;
     final completed = order.status == OrderStatus.completed;
     final cancelled = order.status == OrderStatus.cancelled;
+    // The agreed price is the order total, set once a quote is accepted.
+    final hasPrice = order.totalCents != null && order.totalCents! > 0;
 
     return PressScale(
       onTap: () => context.pushNamed(
@@ -124,24 +126,37 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: Insets.sm),
-                if (completed)
-                  TextButton(
-                    onPressed: () => context.pushNamed(
-                      AppRoutes.orderReviewName,
-                      pathParameters: {'orderId': order.id},
-                    ),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: cs.primary,
-                    ),
-                    child: const Text('Review'),
-                  )
-                else if (order.totalCents != null && order.totalCents! > 0)
-                  Text(
-                    Formatters.currencyFromCents(order.totalCents!),
-                    style: context.tt.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasPrice) ...[
+                      Text('Agreed',
+                          style: context.tt.labelSmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                      Text(
+                        Formatters.currencyFromCents(order.totalCents!),
+                        style: context.tt.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ] else if (!completed)
+                      Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+                    if (completed)
+                      TextButton(
+                        onPressed: () => context.pushNamed(
+                          AppRoutes.orderReviewName,
+                          pathParameters: {'orderId': order.id},
+                        ),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: cs.primary,
+                        ),
+                        child: const Text('Review'),
+                      ),
+                  ],
+                ),
               ],
             ),
             if (!cancelled) ...[
