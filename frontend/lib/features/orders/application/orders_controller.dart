@@ -69,6 +69,19 @@ class OrdersController extends AsyncNotifier<List<Order>> {
     return order;
   }
 
+  /// Cancels an order, applying the backend's refund matrix. Returns the
+  /// updated order (now CANCELLED/REFUNDED) and refreshes the detail + list so
+  /// the UI reflects the new status. Throws an [AppException] on failure.
+  Future<Order> cancelOrder(String orderId) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.orderCancel(orderId),
+    );
+    final order = Order.fromJson(response.data!);
+    ref.invalidate(orderDetailProvider(orderId));
+    await refresh();
+    return order;
+  }
+
   /// Formats a date as the backend's expected YYYY-MM-DD.
   static String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
