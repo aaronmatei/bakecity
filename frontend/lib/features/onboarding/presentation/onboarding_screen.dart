@@ -11,6 +11,7 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
 import '../../bakers/domain/my_baker_profile.dart';
+import '../../discovery/application/discovery_controller.dart';
 import '../application/onboarding_controller.dart';
 
 /// A locally-picked identity document awaiting upload. [mediaId] is set once it
@@ -94,6 +95,7 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
   final List<_KycDoc> _kycDocs = [];
   static const int _maxKycDocs = 4;
   bool _pickingDoc = false;
+  bool _locating = false;
   bool _submitting = false;
 
   @override
@@ -123,6 +125,28 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
     _lat.dispose();
     _lng.dispose();
     super.dispose();
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _locating = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      ref.invalidate(userLocationProvider);
+      final loc = await ref.read(userLocationProvider.future);
+      if (loc == null) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text(
+              'Couldn\'t get your location. Enable location access or enter it manually.'),
+        ));
+        return;
+      }
+      setState(() {
+        _lat.text = loc.latitude.toStringAsFixed(6);
+        _lng.text = loc.longitude.toStringAsFixed(6);
+      });
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   Future<void> _addDoc() async {
@@ -286,14 +310,27 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
                 validator: (v) => _positiveInt(v, field: 'Daily capacity'),
               ),
               const SizedBox(height: 24),
-              Text('Location (optional)', style: theme.textTheme.titleMedium),
+              Text('Location', style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
-                'Pin your bakery so nearby customers can find you. Leave blank '
-                'to set it later.',
+                'Pin your bakery so nearby customers can find you. This is '
+                'required so you show up in distance searches.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _locating ? null : _useCurrentLocation,
+                icon: _locating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                label: Text(
+                    _locating ? 'Getting location…' : 'Use my current location'),
               ),
               const SizedBox(height: 12),
               Row(
@@ -306,7 +343,7 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
                         signed: true,
                       ),
                       decoration: const InputDecoration(labelText: 'Latitude'),
-                      validator: (v) => _latLngValidator(v, _lng.text),
+                      validator: (v) => _coordValidator(v, field: 'Latitude'),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -318,7 +355,7 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
                         signed: true,
                       ),
                       decoration: const InputDecoration(labelText: 'Longitude'),
-                      validator: (v) => _latLngValidator(v, _lat.text),
+                      validator: (v) => _coordValidator(v, field: 'Longitude'),
                     ),
                   ),
                 ],
@@ -386,14 +423,11 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
     return null;
   }
 
-  /// Latitude and longitude must be provided together (the backend rejects one
-  /// without the other).
-  String? _latLngValidator(String? value, String other) {
-    final thisEmpty = (value ?? '').trim().isEmpty;
-    final otherEmpty = other.trim().isEmpty;
-    if (thisEmpty && otherEmpty) return null; // both blank is fine
-    if (thisEmpty) return 'Required with the other coordinate';
-    if (double.tryParse(value!.trim()) == null) return 'Invalid number';
+  /// A coordinate is now required so the bakery is discoverable by distance.
+  String? _coordValidator(String? value, {required String field}) {
+    final t = (value ?? '').trim();
+    if (t.isEmpty) return '$field is required';
+    if (double.tryParse(t) == null) return 'Invalid number';
     return null;
   }
 }

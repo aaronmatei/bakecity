@@ -63,6 +63,11 @@ func (s *Service) SubmitKYC(ctx context.Context, actor Actor, id string) (*Baker
 	if err != nil {
 		return nil, err
 	}
+	// A location is required so the bakery is discoverable by distance.
+	if profile.Lat == nil || profile.Lng == nil {
+		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation,
+			"set your bakery's location before submitting for review")
+	}
 	docs, err := s.media.ListByOwnerKind(ctx, profile.UserID, media.KindKYC)
 	if err != nil {
 		return nil, err
