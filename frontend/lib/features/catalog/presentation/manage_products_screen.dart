@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -9,9 +8,11 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/network_photo.dart';
+import '../../../widgets/press_scale.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 import '../../products/application/products_controller.dart';
 import '../../products/domain/product.dart';
+import 'product_form_screen.dart';
 
 /// Lets a baker manage their own catalog: toggle each product's availability
 /// and edit its starting price. (Uses the existing owner-only PATCH /products.)
@@ -31,6 +32,13 @@ class ManageProductsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Manage menu')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ProductFormScreen(bakerId: bakerId),
+        )),
+        icon: const Icon(Icons.add),
+        label: const Text('Add product'),
+      ),
       body: products.when(
         loading: () => const LoadingIndicator(),
         error: (e, _) => AppErrorView(
@@ -86,39 +94,10 @@ class _ManageTile extends ConsumerWidget {
     }
   }
 
-  Future<void> _editPrice(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController(
-        text: (product.basePriceCents / 100).toStringAsFixed(0));
-    final newPrice = await showDialog<double>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit starting price'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-          decoration: const InputDecoration(
-            labelText: 'Starting price (KES)',
-            prefixIcon: Icon(Icons.sell_outlined),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(ctx, double.tryParse(controller.text.trim())),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (newPrice != null && newPrice > 0) {
-      await _update(ref, messenger, basePriceCents: (newPrice * 100).round());
-    }
+  void _openEdit(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ProductFormScreen(bakerId: bakerId, product: product),
+    ));
   }
 
   @override
@@ -137,42 +116,43 @@ class _ManageTile extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Opacity(
-            opacity: available ? 1 : 0.45,
-            child: NetworkPhoto(
-                url: image, width: 56, height: 56, radius: Radii.chip),
-          ),
-          const SizedBox(width: Insets.md),
+          // Tap the product to open the full edit form.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.tt.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () => _editPrice(context, ref),
-                  child: Row(
-                    children: [
-                      Text(
-                        'From ${Formatters.currencyFromCents(product.basePriceCents)}',
-                        style: context.tt.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.edit_outlined,
-                          size: 14, color: cs.onSurfaceVariant),
-                    ],
+            child: PressScale(
+              onTap: () => _openEdit(context),
+              child: Row(
+                children: [
+                  Opacity(
+                    opacity: available ? 1 : 0.45,
+                    child: NetworkPhoto(
+                        url: image, width: 56, height: 56, radius: Radii.chip),
                   ),
-                ),
-              ],
+                  const SizedBox(width: Insets.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.tt.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'From ${Formatters.currencyFromCents(product.basePriceCents)}',
+                          style: context.tt.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+          const SizedBox(width: Insets.sm),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [

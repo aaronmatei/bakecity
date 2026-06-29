@@ -167,17 +167,46 @@ class CatalogController {
   CatalogController(this._ref);
   final Ref _ref;
 
+  /// Creates a product for the signed-in baker.
+  Future<void> createProduct({
+    required String title,
+    String? categoryId,
+    String? description,
+    required int basePriceCents,
+    int? leadTimeDays,
+  }) async {
+    await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
+      ApiEndpoints.products,
+      data: {
+        'title': title,
+        if (categoryId != null) 'category_id': categoryId,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        'base_price': basePriceCents / 100,
+        if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
+      },
+    );
+  }
+
   /// Patches a product (owner-only on the backend). Pass only what changes.
   Future<void> updateProduct(
     String id, {
     bool? active,
     int? basePriceCents,
+    String? title,
+    String? description,
+    String? categoryId,
+    int? leadTimeDays,
   }) async {
     await _ref.read(apiClientProvider).patch<Map<String, dynamic>>(
       ApiEndpoints.product(id),
       data: {
         if (active != null) 'active': active,
         if (basePriceCents != null) 'base_price': basePriceCents / 100,
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (categoryId != null) 'category_id': categoryId,
+        if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
       },
     );
   }
