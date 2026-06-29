@@ -172,15 +172,38 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   }
 }
 
-/// Horizontal filter row: distance radius + category chips, both wired to the
-/// active [discoveryFilterProvider].
+/// Horizontal filter row: distance, rating, price popups + category chips, all
+/// wired to the active [discoveryFilterProvider].
 class _DiscoveryFilterBar extends ConsumerWidget {
   const _DiscoveryFilterBar();
 
   static const List<double?> _radii = [null, 2, 5, 10, 20, 50];
+  static const List<double?> _ratings = [null, 3, 4, 4.5];
+
+  // (label, minPrice, maxPrice) brackets in KES.
+  static const List<(String, double?, double?)> _priceBrackets = [
+    ('Any price', null, null),
+    ('Under 2k', null, 2000.0),
+    ('2k–5k', 2000.0, 5000.0),
+    ('5k–10k', 5000.0, 10000.0),
+    ('Over 10k', 10000.0, null),
+  ];
 
   static String _radiusLabel(double? km) =>
       km == null ? 'Any distance' : 'Within ${km.toInt()} km';
+
+  static String _ratingLabel(double? r) {
+    if (r == null) return 'Any rating';
+    final s = r % 1 == 0 ? r.toInt().toString() : r.toString();
+    return '$s★+';
+  }
+
+  static String _priceLabel(double? min, double? max) {
+    for (final (label, lo, hi) in _priceBrackets) {
+      if (lo == min && hi == max) return label;
+    }
+    return 'Price';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -202,15 +225,43 @@ class _DiscoveryFilterBar extends ConsumerWidget {
               for (final r in _radii)
                 PopupMenuItem(value: r, child: Text(_radiusLabel(r))),
             ],
-            child: Chip(
-              avatar: const Icon(Icons.place_outlined, size: 18),
-              label: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_radiusLabel(filter.radiusKm)),
-                  const Icon(Icons.arrow_drop_down, size: 18),
-                ],
-              ),
+            child: _FilterChipButton(
+              icon: Icons.place_outlined,
+              label: _radiusLabel(filter.radiusKm),
+            ),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<double?>(
+            initialValue: filter.minRating,
+            onSelected: (value) => notifier.state =
+                filter.copyWith(minRating: value, clearRating: value == null),
+            itemBuilder: (_) => [
+              for (final r in _ratings)
+                PopupMenuItem(value: r, child: Text(_ratingLabel(r))),
+            ],
+            child: _FilterChipButton(
+              icon: Icons.star_outline,
+              label: _ratingLabel(filter.minRating),
+            ),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<(String, double?, double?)>(
+            onSelected: (bracket) {
+              final (_, lo, hi) = bracket;
+              notifier.state = filter.copyWith(
+                minPrice: lo,
+                maxPrice: hi,
+                clearMinPrice: lo == null,
+                clearMaxPrice: hi == null,
+              );
+            },
+            itemBuilder: (_) => [
+              for (final bracket in _priceBrackets)
+                PopupMenuItem(value: bracket, child: Text(bracket.$1)),
+            ],
+            child: _FilterChipButton(
+              icon: Icons.sell_outlined,
+              label: _priceLabel(filter.minPrice, filter.maxPrice),
             ),
           ),
           const SizedBox(width: 8),
@@ -232,6 +283,28 @@ class _DiscoveryFilterBar extends ConsumerWidget {
             ],
             orElse: () => const [],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A chip styled as a dropdown trigger (icon + label + caret).
+class _FilterChipButton extends StatelessWidget {
+  const _FilterChipButton({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(icon, size: 18),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          const Icon(Icons.arrow_drop_down, size: 18),
         ],
       ),
     );

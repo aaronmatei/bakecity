@@ -17,6 +17,9 @@ class DiscoveryFilter {
     this.query = '',
     this.radiusKm,
     this.categorySlug,
+    this.minRating,
+    this.minPrice,
+    this.maxPrice,
     this.latitude,
     this.longitude,
   });
@@ -24,6 +27,9 @@ class DiscoveryFilter {
   final String query;
   final double? radiusKm;
   final String? categorySlug;
+  final double? minRating;
+  final double? minPrice;
+  final double? maxPrice;
   final double? latitude;
   final double? longitude;
 
@@ -31,15 +37,24 @@ class DiscoveryFilter {
     String? query,
     double? radiusKm,
     String? categorySlug,
+    double? minRating,
+    double? minPrice,
+    double? maxPrice,
     double? latitude,
     double? longitude,
     bool clearRadius = false,
     bool clearCategory = false,
+    bool clearRating = false,
+    bool clearMinPrice = false,
+    bool clearMaxPrice = false,
   }) {
     return DiscoveryFilter(
       query: query ?? this.query,
       radiusKm: clearRadius ? null : (radiusKm ?? this.radiusKm),
       categorySlug: clearCategory ? null : (categorySlug ?? this.categorySlug),
+      minRating: clearRating ? null : (minRating ?? this.minRating),
+      minPrice: clearMinPrice ? null : (minPrice ?? this.minPrice),
+      maxPrice: clearMaxPrice ? null : (maxPrice ?? this.maxPrice),
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
     );
@@ -49,6 +64,9 @@ class DiscoveryFilter {
         if (query.isNotEmpty) 'q': query,
         if (radiusKm != null) 'radius_km': radiusKm,
         if (categorySlug != null) 'category': categorySlug,
+        if (minRating != null) 'min_rating': minRating,
+        if (minPrice != null) 'min_price': minPrice,
+        if (maxPrice != null) 'max_price': maxPrice,
         if (latitude != null) 'lat': latitude,
         if (longitude != null) 'lng': longitude,
       };
