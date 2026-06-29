@@ -21,6 +21,10 @@ type Config struct {
 	AWSSecretAccessKey string
 	AWSRegion          string
 	AWSBucket          string
+	// AWSEndpoint overrides the S3 endpoint for S3-compatible stores (e.g.
+	// Cloudflare R2: https://<ACCOUNT_ID>.r2.cloudflarestorage.com). Empty
+	// means real AWS S3.
+	AWSEndpoint string
 
 	PSPProvider  string
 	PSPAPIKey    string
@@ -57,6 +61,7 @@ func Load() *Config {
 		AWSSecretAccessKey: getEnv("AWS_SECRET_ACCESS_KEY", ""),
 		AWSRegion:          getEnv("AWS_REGION", "us-east-1"),
 		AWSBucket:          getEnv("AWS_BUCKET_NAME", "bakecity"),
+		AWSEndpoint:        getEnv("S3_ENDPOINT", ""),
 
 		PSPProvider:  getEnv("PSP_PROVIDER", "pesapal"),
 		PSPAPIKey:    getEnv("PSP_API_KEY", ""),

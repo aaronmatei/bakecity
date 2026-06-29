@@ -57,7 +57,18 @@ func New(deps Deps) *gin.Engine {
 
 	// Shared infrastructure.
 	psp := pspclient.NewStubClient()
-	presigner := storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
+	// Use a real S3-compatible presigner (AWS S3 / Cloudflare R2 / MinIO) when
+	// credentials are configured; otherwise fall back to the dev stub that
+	// signs nothing.
+	var presigner storage.Presigner
+	if deps.Cfg.AWSAccessKeyID != "" && deps.Cfg.AWSSecretAccessKey != "" {
+		presigner = storage.NewS3Presigner(
+			deps.Cfg.AWSEndpoint, deps.Cfg.AWSRegion, deps.Cfg.AWSBucket,
+			deps.Cfg.AWSAccessKeyID, deps.Cfg.AWSSecretAccessKey,
+		)
+	} else {
+		presigner = storage.NewStubPresigner(deps.Cfg.AWSBucket, deps.Cfg.AWSRegion)
+	}
 	sender := notifications.NewStubSender()
 	hub := notifications.NewHub(deps.Redis)
 	idem := pkg.NewIdempotencyStore(deps.Redis, 0)
