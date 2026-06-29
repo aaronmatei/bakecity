@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/api_endpoints.dart';
 import '../../../services/api_client.dart';
+import '../../orders/application/orders_controller.dart';
 import '../domain/production_update.dart';
 
 /// Loads an order's production timeline (chronological).
@@ -47,5 +48,8 @@ class ProductionController {
       },
     );
     _ref.invalidate(orderProductionProvider(orderId));
+    // Posting can advance the order (start production / mark ready), so refresh
+    // the order too.
+    _ref.invalidate(orderDetailProvider(orderId));
   }
 }

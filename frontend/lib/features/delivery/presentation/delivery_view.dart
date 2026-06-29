@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../orders/application/orders_controller.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
@@ -53,6 +54,8 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     final async = ref.watch(orderDeliveryProvider(widget.orderId));
     final isBaker =
         ref.watch(authControllerProvider).user?.role == UserRole.baker;
+    final orderStatus =
+        ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
 
     return async.when(
       loading: () => const LoadingIndicator(),
@@ -65,7 +68,10 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
         children: [
           _statusCard(delivery),
           const SizedBox(height: 16),
-          if (isBaker) ..._bakerActions(delivery) else _customerActions(delivery),
+          if (isBaker)
+            ..._bakerActions(delivery, orderStatus)
+          else
+            _customerActions(delivery, orderStatus),
         ],
       ),
     );
@@ -91,7 +97,25 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     );
   }
 
-  List<Widget> _bakerActions(Delivery? d) {
+  List<Widget> _bakerActions(Delivery? d, OrderStatus? status) {
+    // Dispatch is valid only once production is complete (READY); re-dispatch
+    // is allowed while OUT_FOR_DELIVERY.
+    final canDispatch =
+        status == OrderStatus.ready || status == OrderStatus.dispatched;
+
+    if (!canDispatch) {
+      return [
+        _Hint(
+          icon: Icons.timelapse_outlined,
+          text: status == OrderStatus.delivered ||
+                  status == OrderStatus.completed
+              ? 'This order has been delivered.'
+              : 'You can dispatch once production reaches 100% on the '
+                  'Production tab.',
+        ),
+      ];
+    }
+
     return [
       DropdownButtonFormField<String>(
         initialValue: _method,
@@ -128,9 +152,25 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     ];
   }
 
-  Widget _customerActions(Delivery? d) {
+  Widget _customerActions(Delivery? d, OrderStatus? status) {
+    final delivered = d?.isDelivered == true || status == OrderStatus.delivered;
+    // The customer confirms receipt only once the order is out for delivery.
+    final canConfirm = status == OrderStatus.dispatched && !delivered;
+
+    if (delivered) {
+      return const _Hint(
+        icon: Icons.check_circle_outline,
+        text: 'You’ve confirmed receipt. Thanks!',
+      );
+    }
+    if (!canConfirm) {
+      return const _Hint(
+        icon: Icons.local_shipping_outlined,
+        text: 'You can confirm receipt once the baker dispatches your order.',
+      );
+    }
     return OutlinedButton.icon(
-      onPressed: _busy || d?.isDelivered == true
+      onPressed: _busy
           ? null
           : () => _run(
                 () => ref
@@ -139,7 +179,34 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
                 'Receipt confirmed.',
               ),
       icon: const Icon(Icons.check_circle_outline),
-      label: Text(d?.isDelivered == true ? 'Delivered' : 'Confirm receipt'),
+      label: const Text('Confirm receipt'),
+    );
+  }
+}
+
+/// A small contextual hint row used when no action is currently available.
+class _Hint extends StatelessWidget {
+  const _Hint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+        ],
+      ),
     );
   }
 }

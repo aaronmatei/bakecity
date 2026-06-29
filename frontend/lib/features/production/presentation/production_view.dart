@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../orders/application/orders_controller.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../services/upload_service.dart';
@@ -92,9 +93,18 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
     final updates = ref.watch(orderProductionProvider(widget.orderId));
     final isBaker =
         ref.watch(authControllerProvider).user?.role == UserRole.baker;
+    final orderStatus =
+        ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
+    // The backend accepts production updates only while DEPOSIT_PAID (starts
+    // production) or IN_PRODUCTION.
+    final canPost = isBaker &&
+        (orderStatus == OrderStatus.depositPaid ||
+            orderStatus == OrderStatus.inProduction);
 
     return Column(
       children: [
+        if (isBaker && orderStatus != null)
+          _ProductionBanner(status: orderStatus),
         Expanded(
           child: updates.when(
             loading: () => const LoadingIndicator(),
@@ -132,7 +142,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
             },
           ),
         ),
-        if (isBaker) _composer(),
+        if (canPost) _composer(),
       ],
     );
   }
@@ -172,6 +182,16 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                 ),
               ],
             ),
+            if (_progress.round() == 100)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'Posting at 100% marks the order ready for delivery.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
             OutlinedButton.icon(
               onPressed: _uploading || _submitting ? null : _attachPhoto,
               icon: _uploading
@@ -194,6 +214,62 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A contextual banner telling the baker where the order stands and what to do
+/// next in the production flow.
+class _ProductionBanner extends StatelessWidget {
+  const _ProductionBanner({required this.status});
+
+  final OrderStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (IconData icon, String message) = switch (status) {
+      OrderStatus.draft ||
+      OrderStatus.pendingQuote ||
+      OrderStatus.quoted ||
+      OrderStatus.accepted =>
+        (Icons.payments_outlined,
+            'Production starts once the customer pays the deposit.'),
+      OrderStatus.depositPaid => (
+          Icons.play_circle_outline,
+          'Deposit received — post your first update to start production.'
+        ),
+      OrderStatus.inProduction => (
+          Icons.timelapse_outlined,
+          'In production. Post updates, and set 100% when it’s ready.'
+        ),
+      OrderStatus.ready => (
+          Icons.check_circle_outline,
+          'Production complete. Dispatch from the Delivery tab.'
+        ),
+      OrderStatus.dispatched =>
+        (Icons.local_shipping_outlined, 'Out for delivery.'),
+      OrderStatus.delivered => (Icons.done_all, 'Delivered.'),
+      OrderStatus.completed =>
+        (Icons.verified_outlined, 'Order completed.'),
+      OrderStatus.cancelled ||
+      OrderStatus.disputed =>
+        (Icons.block_outlined, 'No production updates for this order.'),
+    };
+
+    return Container(
+      width: double.infinity,
+      color: theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message, style: theme.textTheme.bodyMedium),
+          ),
+        ],
       ),
     );
   }

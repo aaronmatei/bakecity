@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../services/api_client.dart';
+import '../../orders/application/orders_controller.dart';
 import '../domain/delivery.dart';
 
 /// Loads an order's delivery, or null if it hasn't been dispatched yet (the
@@ -47,6 +48,7 @@ class DeliveryController {
       },
     );
     _ref.invalidate(orderDeliveryProvider(orderId));
+    _ref.invalidate(orderDetailProvider(orderId));
   }
 
   /// Confirms receipt (proof-of-delivery), moving the order to DELIVERED and
@@ -63,5 +65,6 @@ class DeliveryController {
       },
     );
     _ref.invalidate(orderDeliveryProvider(orderId));
+    _ref.invalidate(orderDetailProvider(orderId));
   }
 }
