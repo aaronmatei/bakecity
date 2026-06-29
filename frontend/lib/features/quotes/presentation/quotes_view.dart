@@ -11,6 +11,7 @@ import '../../../widgets/loading_indicator.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../orders/application/orders_controller.dart';
 import '../../orders/presentation/order_request_details.dart';
+import '../../products/application/products_controller.dart';
 import '../domain/quote.dart';
 import '../application/quotes_controller.dart';
 
@@ -44,7 +45,32 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
 
   // ---- Baker: send / revise a quote -------------------------------------
 
+  /// Pre-fill the quote with the catalog price of the size the customer chose
+  /// (from the order's `size` spec), so the baker starts from the right number.
+  Future<double?> _suggestedAmount() async {
+    final order = ref.read(orderDetailProvider(widget.orderId)).valueOrNull;
+    if (order == null || order.productId == null) return null;
+    String? sizeLabel;
+    for (final s in order.specs) {
+      if (s.key == 'size') {
+        sizeLabel = s.value;
+        break;
+      }
+    }
+    if (sizeLabel == null) return null;
+    try {
+      final product =
+          await ref.read(productDetailProvider(order.productId!).future);
+      for (final sz in product.sizes) {
+        if (sz.label == sizeLabel) return sz.priceCents / 100;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _openQuoteForm({required bool isUpdate}) async {
+    final suggested = await _suggestedAmount();
+    if (!mounted) return;
     final sent = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -52,6 +78,7 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: _QuoteForm(
           isUpdate: isUpdate,
+          initialAmount: suggested,
           onSubmit: (amount, depositPct, validUntil, isFinal) async {
             await ref.read(quotesControllerProvider).submitQuote(
                   orderId: widget.orderId,
@@ -535,9 +562,16 @@ class _OfferFormState extends State<_OfferForm> {
 
 /// Bottom-sheet form the baker uses to propose (or revise) a quote.
 class _QuoteForm extends StatefulWidget {
-  const _QuoteForm({required this.isUpdate, required this.onSubmit});
+  const _QuoteForm({
+    required this.isUpdate,
+    required this.onSubmit,
+    this.initialAmount,
+  });
 
   final bool isUpdate;
+
+  /// Suggested total (KES) from the customer's chosen size, if any.
+  final double? initialAmount;
   final Future<void> Function(
     double amount,
     double depositPct,
@@ -551,7 +585,11 @@ class _QuoteForm extends StatefulWidget {
 
 class _QuoteFormState extends State<_QuoteForm> {
   final _formKey = GlobalKey<FormState>();
-  final _amount = TextEditingController();
+  late final TextEditingController _amount = TextEditingController(
+    text: widget.initialAmount != null
+        ? widget.initialAmount!.toStringAsFixed(0)
+        : '',
+  );
   final _depositPct = TextEditingController(text: '50');
   DateTime? _validUntil;
   bool _isFinal = false;
@@ -642,9 +680,12 @@ class _QuoteFormState extends State<_QuoteForm> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Total price (KES)',
-                  prefixIcon: Icon(Icons.sell_outlined),
+                  prefixIcon: const Icon(Icons.sell_outlined),
+                  helperText: widget.initialAmount != null
+                      ? 'Suggested from the customer\'s chosen size — adjust as needed'
+                      : null,
                 ),
                 validator: _validateAmount,
               ),
