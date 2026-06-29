@@ -29,18 +29,24 @@ class BakerProfile {
   final List<String> specialties;
 
   factory BakerProfile.fromJson(Map<String, dynamic> json) {
+    // The search backend sends `lat`/`lng`/`avg_rating`/`status`; older shapes
+    // used `latitude`/`longitude`/`rating`/`is_verified`. Accept both.
     return BakerProfile(
       id: json['id'].toString(),
       businessName: json['business_name'] as String? ?? 'Unnamed bakery',
       bio: json['bio'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       coverImageUrl: json['cover_image_url'] as String?,
-      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      rating: (json['avg_rating'] as num?)?.toDouble() ??
+          (json['rating'] as num?)?.toDouble() ??
+          0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
+      latitude: (json['lat'] as num?)?.toDouble() ??
+          (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['lng'] as num?)?.toDouble() ??
+          (json['longitude'] as num?)?.toDouble(),
       distanceKm: (json['distance_km'] as num?)?.toDouble(),
-      isVerified: json['is_verified'] as bool? ?? false,
+      isVerified: json['is_verified'] as bool? ?? json['status'] == 'approved',
       specialties: (json['specialties'] as List?)
               ?.map((e) => e.toString())
               .toList() ??

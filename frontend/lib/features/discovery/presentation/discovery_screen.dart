@@ -1,19 +1,86 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../bakers/domain/baker_profile.dart';
 import '../application/discovery_controller.dart';
 
 /// Search + map of nearby bakers.
-class DiscoveryScreen extends ConsumerWidget {
+class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DiscoveryScreen> createState() => _DiscoveryScreenState();
+}
+
+class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
+  final Completer<GoogleMapController> _mapController = Completer();
+  bool _hasLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
+  }
+
+  /// Resolves the user's location, makes the search distance-aware, and recentres
+  /// the map. Silently no-ops when location is unavailable (map stays on the
+  /// default centre).
+  Future<void> _initLocation() async {
+    final location = await ref.read(userLocationProvider.future);
+    if (location == null || !mounted) return;
+
+    final filter = ref.read(discoveryFilterProvider);
+    ref.read(discoveryFilterProvider.notifier).state = filter.copyWith(
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
+    setState(() => _hasLocation = true);
+
+    if (_mapController.isCompleted) {
+      final controller = await _mapController.future;
+      await controller.animateCamera(CameraUpdate.newLatLng(location));
+    }
+  }
+
+  void _openStorefront(String bakerId) {
+    context.pushNamed(
+      AppRoutes.bakerStorefrontName,
+      pathParameters: {'bakerId': bakerId},
+    );
+  }
+
+  Set<Marker> _markersFor(List<BakerProfile> bakers) {
+    return {
+      for (final baker in bakers)
+        if (baker.latitude != null && baker.longitude != null)
+          Marker(
+            markerId: MarkerId(baker.id),
+            position: LatLng(baker.latitude!, baker.longitude!),
+            infoWindow: InfoWindow(
+              title: baker.businessName,
+              snippet: '${baker.rating.toStringAsFixed(1)} ★ — tap to view',
+              onTap: () => _openStorefront(baker.id),
+            ),
+          ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bakers = ref.watch(nearbyBakersProvider);
     final filter = ref.watch(discoveryFilterProvider);
+    final markers = bakers.maybeWhen(
+      data: _markersFor,
+      orElse: () => <Marker>{},
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Discover bakers')),
@@ -30,23 +97,27 @@ class DiscoveryScreen extends ConsumerWidget {
               },
             ),
           ),
-          // Map placeholder. TODO: integrate google_maps_flutter with markers
-          // for nearby bakers plus geolocator for the user's position.
           Container(
-            height: 160,
+            height: 180,
             margin: const EdgeInsets.symmetric(horizontal: 16),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(16),
             ),
-            alignment: Alignment.center,
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.map_outlined, size: 36),
-                SizedBox(height: 8),
-                Text('Map of nearby bakers'),
-              ],
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: kDefaultMapCenter,
+                zoom: 12,
+              ),
+              markers: markers,
+              myLocationEnabled: _hasLocation,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              onMapCreated: (controller) {
+                if (!_mapController.isCompleted) {
+                  _mapController.complete(controller);
+                }
+              },
             ),
           ),
           const SizedBox(height: 8),
@@ -84,9 +155,7 @@ class DiscoveryScreen extends ConsumerWidget {
                         trailing: baker.isVerified
                             ? const Icon(Icons.verified, size: 18)
                             : null,
-                        onTap: () {
-                          // TODO: Navigate to baker storefront.
-                        },
+                        onTap: () => _openStorefront(baker.id),
                       ),
                     );
                   },

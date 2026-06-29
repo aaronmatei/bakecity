@@ -28,7 +28,6 @@ class ApiEndpoints {
   static String baker(String id) => '/bakers/$id';
   static String bakerVerify(String id) => '/bakers/$id/verify'; // KYC submission
   static String bakerAvailability(String id) => '/bakers/$id/availability';
-  static String bakerProducts(String id) => '/bakers/$id/products';
   static String bakerReviews(String id) => '/bakers/$id/reviews';
 
   // ---- Discovery / search ----

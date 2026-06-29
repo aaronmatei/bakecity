@@ -8,6 +8,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/admin/presentation/admin_dashboard_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/bakers/presentation/baker_storefront_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
@@ -151,6 +152,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.productOrderRequestName,
         builder: (context, state) => OrderRequestScreen(
           productId: state.pathParameters['productId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.bakerStorefront,
+        name: AppRoutes.bakerStorefrontName,
+        builder: (context, state) => BakerStorefrontScreen(
+          bakerId: state.pathParameters['bakerId']!,
         ),
       ),
       GoRoute(

@@ -17,6 +17,13 @@ class BakerService {
 
   final ApiClient _api;
 
+  /// A baker's profile by id (public storefront view).
+  Future<MyBakerProfile> profile(String id) async {
+    final response =
+        await _api.get<Map<String, dynamic>>(ApiEndpoints.baker(id));
+    return MyBakerProfile.fromJson(response.data!);
+  }
+
   /// The authenticated user's baker profile, or null if they have none yet
   /// (e.g. an older account created before the profile was provisioned).
   Future<MyBakerProfile?> myProfile() async {

@@ -4,14 +4,17 @@ import '../../../core/constants/api_endpoints.dart';
 import '../../../services/api_client.dart';
 import '../domain/product.dart';
 
-/// Loads products, optionally scoped to a baker.
+/// Loads products, optionally scoped to a baker. Baker scoping is done via the
+/// `baker_id` filter on GET /products (the backend has no /bakers/:id/products).
 final productsProvider =
     FutureProvider.family<List<Product>, String?>((ref, bakerId) async {
   final api = ref.watch(apiClientProvider);
-  final path = bakerId == null
-      ? ApiEndpoints.products
-      : ApiEndpoints.bakerProducts(bakerId);
-  final response = await api.get<Map<String, dynamic>>(path);
+  final response = await api.get<Map<String, dynamic>>(
+    ApiEndpoints.products,
+    queryParameters: {
+      if (bakerId != null) 'baker_id': bakerId,
+    },
+  );
   final items =
       (response.data?['data'] ?? response.data?['products'] ?? []) as List;
   return items

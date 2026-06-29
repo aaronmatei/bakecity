@@ -17,6 +17,7 @@ class AppRoutes {
   static const String profile = '/profile';
 
   // Parameterised.
+  static const String bakerStorefront = '/bakers/:bakerId';
   static const String productDetail = '/products/:productId';
   static const String productOrderRequest = '/products/:productId/order';
   static const String bakerReviews = '/bakers/:bakerId/reviews';
@@ -36,6 +37,7 @@ class AppRoutes {
   static const String notificationsName = 'notifications';
   static const String payoutsName = 'payouts';
   static const String profileName = 'profile';
+  static const String bakerStorefrontName = 'bakerStorefront';
   static const String productDetailName = 'productDetail';
   static const String productOrderRequestName = 'productOrderRequest';
   static const String bakerReviewsName = 'bakerReviews';
@@ -51,6 +53,7 @@ class AppRoutes {
   static const String orderTabPayment = 'payment';
   static const String orderTabDispute = 'dispute';
 
+  static String bakerStorefrontPath(String bakerId) => '/bakers/$bakerId';
   static String productDetailPath(String productId) => '/products/$productId';
   static String productOrderRequestPath(String productId) =>
       '/products/$productId/order';
