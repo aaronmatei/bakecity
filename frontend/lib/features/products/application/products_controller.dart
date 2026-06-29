@@ -182,6 +182,7 @@ class CatalogController {
     String? cakeFlavor,
     String? cakeFormat,
     List<Map<String, dynamic>> sizes = const [],
+    List<String> imageMediaIds = const [],
   }) async {
     await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
       ApiEndpoints.products,
@@ -199,6 +200,7 @@ class CatalogController {
         if (cakeFlavor != null) 'cake_flavor': cakeFlavor,
         if (cakeFormat != null) 'cake_format': cakeFormat,
         'sizes': sizes,
+        if (imageMediaIds.isNotEmpty) 'image_media_ids': imageMediaIds,
       },
     );
   }
@@ -220,6 +222,7 @@ class CatalogController {
     String? cakeFlavor,
     String? cakeFormat,
     List<Map<String, dynamic>>? sizes,
+    List<String>? imageMediaIds,
   }) async {
     await _ref.read(apiClientProvider).patch<Map<String, dynamic>>(
       ApiEndpoints.product(id),
@@ -237,6 +240,7 @@ class CatalogController {
         if (cakeFlavor != null) 'cake_flavor': cakeFlavor,
         if (cakeFormat != null) 'cake_format': cakeFormat,
         if (sizes != null) 'sizes': sizes,
+        if (imageMediaIds != null) 'image_media_ids': imageMediaIds,
       },
     );
   }

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/validators.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../services/upload_service.dart';
+import '../../../widgets/network_photo.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/primary_button.dart';
 import '../../products/application/products_controller.dart';
@@ -62,6 +64,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _format;
   late Set<String> _dietary;
   late List<_SizeRow> _sizes;
+  String? _newImageMediaId;
+  bool _uploadingImage = false;
   bool _saving = false;
 
   bool get _isEdit => widget.product != null;
@@ -103,6 +107,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       r.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    setState(() => _uploadingImage = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id = await ref
+          .read(uploadServiceProvider)
+          .pickAndUpload(kind: MediaKind.product);
+      if (id != null) setState(() => _newImageMediaId = id);
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   bool _isCakes(List<Category> cats) {
@@ -155,6 +174,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFlavor: cakes ? _flavor : null,
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
+          imageMediaIds:
+              _newImageMediaId != null ? [_newImageMediaId!] : null,
         );
       } else {
         await ctrl.createProduct(
@@ -170,6 +191,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFlavor: cakes ? _flavor : null,
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
+          imageMediaIds:
+              _newImageMediaId != null ? [_newImageMediaId!] : const [],
         );
       }
       ref.invalidate(bakerManageProductsProvider(widget.bakerId));
@@ -196,6 +219,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(Insets.screenH),
             children: [
+              _imageSection(),
+              const SizedBox(height: Insets.lg),
               TextFormField(
                 controller: _title,
                 textInputAction: TextInputAction.next,
@@ -342,6 +367,67 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _imageSection() {
+    final cs = context.cs;
+    final existing = widget.product?.imageUrls ?? const <String>[];
+    final hasExisting = existing.isNotEmpty;
+    return PressScale(
+      onTap: _uploadingImage ? null : _pickImage,
+      child: Container(
+        height: 170,
+        width: double.infinity,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: Radii.cardBorder,
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_newImageMediaId == null && hasExisting)
+              NetworkPhoto(
+                  url: existing.first,
+                  height: 170,
+                  width: double.infinity,
+                  radius: 0)
+            else if (_newImageMediaId != null)
+              Center(
+                  child: Icon(Icons.check_circle,
+                      size: 44, color: context.bake.success))
+            else
+              Center(
+                  child: Icon(Icons.add_a_photo_outlined,
+                      size: 36, color: cs.onSurfaceVariant)),
+            if (_uploadingImage)
+              Container(
+                color: Colors.black26,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                color: Colors.black.withValues(alpha: 0.45),
+                child: Text(
+                  _newImageMediaId != null
+                      ? 'New photo ready — tap to change'
+                      : hasExisting
+                          ? 'Tap to replace photo'
+                          : 'Tap to add a photo',
+                  textAlign: TextAlign.center,
+                  style: context.tt.labelMedium?.copyWith(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
