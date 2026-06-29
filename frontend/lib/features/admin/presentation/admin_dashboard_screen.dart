@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
@@ -412,24 +413,28 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: theme.textTheme.labelMedium),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+    final cs = context.cs;
+    return Container(
+      padding: const EdgeInsets.all(Insets.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: Radii.cardBorder,
+        boxShadow: context.bake.cardShadow,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: context.tt.labelMedium
+                  ?.copyWith(color: cs.onSurfaceVariant)),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: context.tt.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }
