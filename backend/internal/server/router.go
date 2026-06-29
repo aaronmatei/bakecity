@@ -129,8 +129,8 @@ func New(deps Deps) *gin.Engine {
 	// Services.
 	authSvc := auth.NewService(authRepo, deps.Cfg.JWTSecret)
 	usersSvc := users.NewService(usersRepo)
-	catalogSvc := catalog.NewService(catalogRepo)
-	searchSvc := search.NewService(searchRepo)
+	catalogSvc := catalog.NewService(catalogRepo, presigner)
+	searchSvc := search.NewService(searchRepo, presigner)
 	notificationsSvc := notifications.NewService(notificationsRepo, sender, hub)
 	ledgerSvc := ledger.NewService(ledgerRepo)
 	ordersSvc := orders.NewService(ordersRepo, ledgerSvc, notificationsSvc)

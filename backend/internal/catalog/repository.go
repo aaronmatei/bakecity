@@ -128,6 +128,24 @@ func replaceSizes(ctx context.Context, q execer, productID string, sizes []SizeI
 	return nil
 }
 
+// replaceImages links uploaded media (kind=product) as a product's images in
+// order (caller clears existing rows). Unknown media ids are skipped.
+func replaceImages(ctx context.Context, q execer, productID string, mediaIDs []string) error {
+	for i, mid := range mediaIDs {
+		if mid == "" {
+			continue
+		}
+		if _, err := q.Exec(ctx,
+			`INSERT INTO product_images (product_id, media_id, position)
+			 SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM media WHERE id = $2)
+			 ON CONFLICT DO NOTHING`,
+			productID, mid, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CreateProduct inserts a product (with its catalog attributes and sizes) owned
 // by bakerID, atomically.
 func (r *Repository) CreateProduct(ctx context.Context, bakerID string, req CreateProductRequest) (*Product, error) {
@@ -159,6 +177,9 @@ func (r *Repository) CreateProduct(ctx context.Context, bakerID string, req Crea
 		return nil, err
 	}
 	if err := replaceSizes(ctx, tx, id, req.Sizes); err != nil {
+		return nil, err
+	}
+	if err := replaceImages(ctx, tx, id, req.ImageMediaIDs); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -317,6 +338,14 @@ func (r *Repository) UpdateProduct(ctx context.Context, id string, req UpdatePro
 			return nil, err
 		}
 		if err := replaceSizes(ctx, tx, id, *req.Sizes); err != nil {
+			return nil, err
+		}
+	}
+	if req.ImageMediaIDs != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM product_images WHERE product_id = $1`, id); err != nil {
+			return nil, err
+		}
+		if err := replaceImages(ctx, tx, id, *req.ImageMediaIDs); err != nil {
 			return nil, err
 		}
 	}

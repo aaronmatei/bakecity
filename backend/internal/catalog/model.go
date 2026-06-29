@@ -78,6 +78,9 @@ type CreateProductRequest struct {
 	CakeFlavor   string      `json:"cake_flavor"`
 	CakeFormat   string      `json:"cake_format"`
 	Sizes        []SizeInput `json:"sizes"`
+	// ImageMediaIDs are uploaded media records (kind=product) to attach as the
+	// product's images, in order.
+	ImageMediaIDs []string `json:"image_media_ids"`
 }
 
 // UpdateProductRequest is the payload for PATCH /products/:id. Nil fields are
@@ -97,6 +100,8 @@ type UpdateProductRequest struct {
 	CakeFlavor   *string      `json:"cake_flavor"`
 	CakeFormat   *string      `json:"cake_format"`
 	Sizes        *[]SizeInput `json:"sizes"`
+	// ImageMediaIDs, when non-nil, replaces the product's image set.
+	ImageMediaIDs *[]string `json:"image_media_ids"`
 }
 
 // CreateCategoryRequest is the payload for POST /categories (admin only).

@@ -6,6 +6,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,19 @@ type Presigner interface {
 	// PresignDownload returns a URL the client can GET the object bytes from
 	// (e.g. to display an image). It expires after expiry.
 	PresignDownload(ctx context.Context, key string, expiry time.Duration) (string, error)
+}
+
+// ResolveURL returns key unchanged when it is already an absolute URL (seeded
+// or external images store a full URL in s3_key), otherwise a short-lived
+// presigned download URL for the object key — falling back to key on error.
+func ResolveURL(ctx context.Context, p Presigner, key string, ttl time.Duration) string {
+	if key == "" || strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
+		return key
+	}
+	if u, err := p.PresignDownload(ctx, key, ttl); err == nil {
+		return u
+	}
+	return key
 }
 
 // StubPresigner is a development Presigner. It builds a plausible S3-style URL

@@ -6,11 +6,16 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/corebalt/bakecity/pkg"
+	"github.com/corebalt/bakecity/pkg/storage"
 )
 
 var nonSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// productImageTTL is how long a presigned product-image URL stays valid.
+const productImageTTL = 6 * time.Hour
 
 // Actor identifies the authenticated caller for authorization checks.
 type Actor struct {
@@ -20,12 +25,26 @@ type Actor struct {
 
 // Service implements catalog business logic.
 type Service struct {
-	repo *Repository
+	repo      *Repository
+	presigner storage.Presigner
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, presigner storage.Presigner) *Service {
+	return &Service{repo: repo, presigner: presigner}
+}
+
+// resolveImages turns each product's stored image keys into viewable URLs
+// (seeded images already hold a full URL; uploaded ones are presigned).
+func (s *Service) resolveImages(ctx context.Context, products ...*Product) {
+	for _, p := range products {
+		if p == nil {
+			continue
+		}
+		for i, key := range p.ImageURLs {
+			p.ImageURLs[i] = storage.ResolveURL(ctx, s.presigner, key, productImageTTL)
+		}
+	}
 }
 
 // ---- Categories ----
@@ -55,12 +74,24 @@ func (s *Service) CreateCategory(ctx context.Context, actor Actor, req CreateCat
 
 // ListProducts returns products matching the filter.
 func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]Product, error) {
-	return s.repo.ListProducts(ctx, f)
+	products, err := s.repo.ListProducts(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	for i := range products {
+		s.resolveImages(ctx, &products[i])
+	}
+	return products, nil
 }
 
 // GetProduct returns a single product.
 func (s *Service) GetProduct(ctx context.Context, id string) (*Product, error) {
-	return s.repo.GetProduct(ctx, id)
+	p, err := s.repo.GetProduct(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.resolveImages(ctx, p)
+	return p, nil
 }
 
 // CreateProduct creates a product for the authenticated user's baker profile.
