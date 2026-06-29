@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
 import '../application/reviews_controller.dart';
 import '../domain/review.dart';
+import 'ratings_screen.dart' show Stars;
 
 /// Lets a customer leave (or view) a review for a completed order.
 class ReviewScreen extends ConsumerStatefulWidget {
@@ -39,7 +42,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             rating: _rating,
             body: _commentController.text.trim(),
           );
-      messenger.showSnackBar(const SnackBar(content: Text('Thanks for your review!')));
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Thanks for your review!')));
       router.pop();
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -66,45 +70,63 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   }
 
   Widget _existingReview(Review review) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _stars(review.rating),
-          const SizedBox(height: 12),
-          if (review.comment != null && review.comment!.isNotEmpty)
-            Text(review.comment!, style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 12),
-          Text(
-            'You have already reviewed this order.',
-            style: Theme.of(context).textTheme.bodySmall,
+    final cs = context.cs;
+    return ListView(
+      padding: const EdgeInsets.all(Insets.screenH),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(Insets.lg),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: Radii.cardBorder,
+            boxShadow: context.bake.cardShadow,
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stars(rating: review.rating, size: 24),
+              if (review.comment != null && review.comment!.isNotEmpty) ...[
+                const SizedBox(height: Insets.md),
+                Text(review.comment!, style: context.tt.bodyLarge),
+              ],
+              const SizedBox(height: Insets.md),
+              Text('You\'ve already reviewed this order.',
+                  style: context.tt.bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _reviewForm() {
+    final star = context.bake.star;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(Insets.screenH),
       children: [
-        Text('Rate your order', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
+        Text('How was your order?', style: context.tt.titleLarge),
+        const SizedBox(height: Insets.md),
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             for (var i = 1; i <= 5; i++)
               IconButton(
-                onPressed: _submitting ? null : () => setState(() => _rating = i),
+                onPressed: _submitting
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _rating = i);
+                      },
                 icon: Icon(
-                  i <= _rating ? Icons.star : Icons.star_border,
-                  color: Colors.amber,
-                  size: 36,
+                  i <= _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: star,
+                  size: 44,
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: Insets.lg),
         TextField(
           controller: _commentController,
           maxLines: 4,
@@ -113,26 +135,13 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             alignLabelWithHint: true,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: Insets.xl),
         PrimaryButton(
           label: 'Submit review',
           icon: Icons.send_outlined,
           isLoading: _submitting,
           onPressed: _submitting ? null : _submit,
         ),
-      ],
-    );
-  }
-
-  Widget _stars(int rating) {
-    return Row(
-      children: [
-        for (var i = 1; i <= 5; i++)
-          Icon(
-            i <= rating ? Icons.star : Icons.star_border,
-            color: Colors.amber,
-            size: 28,
-          ),
       ],
     );
   }

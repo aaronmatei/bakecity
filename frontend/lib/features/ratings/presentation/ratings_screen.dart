@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/helpers/formatters.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
@@ -29,17 +30,23 @@ class RatingsScreen extends ConsumerWidget {
           if (data.reviews.isEmpty) {
             return const EmptyState(
               icon: Icons.star_outline,
-              message: 'No reviews yet.',
+              title: 'No reviews yet',
+              message: 'Be the first to review this bakery.',
             );
           }
           return RefreshIndicator(
+            color: context.cs.primary,
             onRefresh: () async => ref.invalidate(bakerReviewsProvider(bakerId)),
             child: ListView.separated(
+              padding: const EdgeInsets.all(Insets.screenH),
               itemCount: data.reviews.length + 1,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const SizedBox(height: Insets.md),
               itemBuilder: (context, i) {
-                if (i == 0) return _header(context, data.averageRating, data.count);
-                return _reviewTile(context, data.reviews[i - 1]);
+                if (i == 0) {
+                  return _SummaryCard(
+                      average: data.averageRating, count: data.count);
+                }
+                return _ReviewCard(review: data.reviews[i - 1]);
               },
             ),
           );
@@ -47,55 +54,99 @@ class RatingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _header(BuildContext context, double average, int count) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(16),
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.average, required this.count});
+  final double average;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    return Container(
+      padding: const EdgeInsets.all(Insets.xl),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: Radii.cardBorder,
+        boxShadow: context.bake.cardShadow,
+      ),
       child: Row(
         children: [
-          Text(
-            average.toStringAsFixed(1),
-            style: theme.textTheme.displaySmall
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 12),
+          Text(average.toStringAsFixed(1),
+              style: context.tt.displaySmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(width: Insets.lg),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _stars(average.round()),
-              const SizedBox(height: 4),
+              Stars(rating: average.round(), size: 20),
+              const SizedBox(height: Insets.xs),
               Text('$count review${count == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodySmall),
+                  style: context.tt.bodyMedium
+                      ?.copyWith(color: cs.onSurfaceVariant)),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _reviewTile(BuildContext context, Review r) {
-    return ListTile(
-      title: _stars(r.rating),
-      subtitle: Text(
-        [
-          if (r.comment != null && r.comment!.isNotEmpty) r.comment!,
-          Formatters.relativeTime(r.createdAt),
-        ].join('\n'),
+class _ReviewCard extends StatelessWidget {
+  const _ReviewCard({required this.review});
+  final Review review;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final hasComment = review.comment != null && review.comment!.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(Insets.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: Radii.cardBorder,
+        boxShadow: context.bake.cardShadow,
       ),
-      isThreeLine: r.comment != null && r.comment!.isNotEmpty,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Stars(rating: review.rating, size: 16),
+              Text(Formatters.relativeTime(review.createdAt),
+                  style: context.tt.bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+          if (hasComment) ...[
+            const SizedBox(height: Insets.sm),
+            Text(review.comment!, style: context.tt.bodyMedium),
+          ],
+        ],
+      ),
     );
   }
+}
 
-  Widget _stars(int rating) {
+/// A row of filled/empty stars in the brand star colour.
+class Stars extends StatelessWidget {
+  const Stars({super.key, required this.rating, this.size = 18});
+  final int rating;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final star = context.bake.star;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 1; i <= 5; i++)
           Icon(
-            i <= rating ? Icons.star : Icons.star_border,
-            color: Colors.amber,
-            size: 18,
+            i <= rating ? Icons.star_rounded : Icons.star_border_rounded,
+            color: star,
+            size: size,
           ),
       ],
     );
