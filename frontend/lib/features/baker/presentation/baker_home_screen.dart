@@ -104,7 +104,11 @@ class _BakerDashboard extends ConsumerWidget {
         ? profile!.businessName
         : (user?.displayName ?? 'Your bakery');
 
-    final orders = ordersAsync.valueOrNull ?? const <Order>[];
+    // Only orders placed WITH this baker — never the ones they placed as a
+    // customer themselves (the list also carries those).
+    final orders = (ordersAsync.valueOrNull ?? const <Order>[])
+        .where((o) => o.customerId != user?.id)
+        .toList();
     int countOf(OrderStatus s) => orders.where((o) => o.status == s).length;
     final attention =
         orders.where((o) => _attentionStatuses.contains(o.status)).toList();

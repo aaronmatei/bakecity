@@ -11,52 +11,118 @@ import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/network_photo.dart';
 import '../../../widgets/press_scale.dart';
+import '../../auth/application/auth_controller.dart';
 import '../domain/order.dart';
 import '../domain/order_status_ui.dart';
 import '../application/orders_controller.dart';
 
-/// The customer's orders, as premium cards with a live status chip and a
-/// lifecycle progress bar.
+/// Orders as premium cards with a status chip and lifecycle bar. Bakers — who
+/// can also place orders as customers — get two tabs so the orders they must
+/// fulfil never mix with the ones they placed.
 class OrdersListScreen extends ConsumerWidget {
   const OrdersListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authControllerProvider).user;
     final orders = ref.watch(ordersControllerProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Your orders')),
-      body: RefreshIndicator(
-        color: context.cs.primary,
-        onRefresh: () => ref.read(ordersControllerProvider.notifier).refresh(),
-        child: orders.when(
-          loading: () => const LoadingIndicator(),
-          error: (e, _) => AppErrorView(
-            message: e.toString(),
-            onRetry: () =>
-                ref.read(ordersControllerProvider.notifier).refresh(),
-          ),
-          data: (list) {
-            if (list.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'No orders yet',
-                    message: 'When you order a custom bake, you can track it here.',
-                  ),
-                ],
-              );
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(Insets.screenH),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
-              itemBuilder: (context, i) => _OrderCard(order: list[i]),
-            );
-          },
+    if (!(user?.isBaker ?? false)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Your orders')),
+        body: _OrdersBody(
+          orders: orders,
+          ref: ref,
+          keep: (_) => true,
+          emptyTitle: 'No orders yet',
+          emptyMessage: 'When you order a custom bake, you can track it here.',
         ),
+      );
+    }
+
+    // A baker sees two tabs: orders placed WITH them, and orders they placed.
+    final uid = user!.id;
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Orders'),
+          bottom: const TabBar(
+            tabs: [Tab(text: 'To fulfil'), Tab(text: 'My orders')],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _OrdersBody(
+              orders: orders,
+              ref: ref,
+              keep: (o) => o.customerId != uid,
+              emptyTitle: 'Nothing to fulfil yet',
+              emptyMessage:
+                  'Orders customers place with your bakery will appear here.',
+            ),
+            _OrdersBody(
+              orders: orders,
+              ref: ref,
+              keep: (o) => o.customerId == uid,
+              emptyTitle: 'No orders yet',
+              emptyMessage: 'Orders you place as a customer show here.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Renders a refreshable, filtered slice of the orders list.
+class _OrdersBody extends StatelessWidget {
+  const _OrdersBody({
+    required this.orders,
+    required this.ref,
+    required this.keep,
+    required this.emptyTitle,
+    required this.emptyMessage,
+  });
+
+  final AsyncValue<List<Order>> orders;
+  final WidgetRef ref;
+  final bool Function(Order) keep;
+  final String emptyTitle;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: context.cs.primary,
+      onRefresh: () => ref.read(ordersControllerProvider.notifier).refresh(),
+      child: orders.when(
+        loading: () => const LoadingIndicator(),
+        error: (e, _) => AppErrorView(
+          message: e.toString(),
+          onRetry: () => ref.read(ordersControllerProvider.notifier).refresh(),
+        ),
+        data: (all) {
+          final list = all.where(keep).toList();
+          if (list.isEmpty) {
+            return ListView(
+              children: [
+                const SizedBox(height: 120),
+                EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: emptyTitle,
+                  message: emptyMessage,
+                ),
+              ],
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(Insets.screenH),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
+            itemBuilder: (context, i) => _OrderCard(order: list[i]),
+          );
+        },
       ),
     );
   }
