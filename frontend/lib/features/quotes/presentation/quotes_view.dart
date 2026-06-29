@@ -7,10 +7,10 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../widgets/app_error_view.dart';
-import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../orders/application/orders_controller.dart';
+import '../../orders/presentation/order_request_details.dart';
 import '../domain/quote.dart';
 import '../application/quotes_controller.dart';
 
@@ -137,56 +137,71 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
       ),
       data: (list) {
         final anyAccepted = list.any((q) => q.status == QuoteStatus.accepted);
-
-        if (list.isEmpty) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (canQuote)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      Insets.screenH, Insets.screenH, Insets.screenH, 0),
-                  child: _sendQuoteButton(isUpdate: false),
-                ),
-              const Expanded(
-                child: EmptyState(
-                  icon: Icons.request_quote_outlined,
-                  title: 'No quotes yet',
-                  message: 'The baker will send you a price shortly.',
-                ),
-              ),
-            ],
-          );
-        }
-
         return RefreshIndicator(
           color: context.cs.primary,
           onRefresh: () async {
             ref.invalidate(orderQuotesProvider(widget.orderId));
             ref.invalidate(orderDetailProvider(widget.orderId));
           },
-          child: ListView.separated(
+          child: ListView(
             padding: const EdgeInsets.all(Insets.screenH),
-            itemCount: list.length + (canQuote ? 1 : 0),
-            separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
-            itemBuilder: (context, i) {
-              if (canQuote && i == 0) {
-                return _sendQuoteButton(isUpdate: true);
-              }
-              final quote = list[i - (canQuote ? 1 : 0)];
-              return _QuoteCard(
-                quote: quote,
-                isLatest: quote == list.first,
-                anyAccepted: anyAccepted,
-                isCustomer: _isCustomer,
-                accepting: _acceptingId == quote.id,
-                busy: _acceptingId != null,
-                onAccept: () => _accept(quote),
-              );
-            },
+            children: [
+              // The customer's request, so the baker knows what to price.
+              OrderRequestDetails(orderId: widget.orderId),
+              const SizedBox(height: Insets.lg),
+              if (canQuote) ...[
+                _sendQuoteButton(isUpdate: list.isNotEmpty),
+                const SizedBox(height: Insets.lg),
+              ],
+              if (list.isEmpty)
+                _NoQuotesYet(isBaker: _isBaker)
+              else
+                for (final quote in list) ...[
+                  _QuoteCard(
+                    quote: quote,
+                    isLatest: quote == list.first,
+                    anyAccepted: anyAccepted,
+                    isCustomer: _isCustomer,
+                    accepting: _acceptingId == quote.id,
+                    busy: _acceptingId != null,
+                    onAccept: () => _accept(quote),
+                  ),
+                  const SizedBox(height: Insets.lg),
+                ],
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Empty-state hint shown when an order has no quotes yet.
+class _NoQuotesYet extends StatelessWidget {
+  const _NoQuotesYet({required this.isBaker});
+  final bool isBaker;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Insets.xl),
+      child: Column(
+        children: [
+          Icon(Icons.request_quote_outlined,
+              size: 40, color: cs.onSurfaceVariant),
+          const SizedBox(height: Insets.md),
+          Text('No quotes yet', style: context.tt.titleMedium),
+          const SizedBox(height: Insets.xs),
+          Text(
+            isBaker
+                ? 'Review the request above and send the customer a price.'
+                : 'The baker will review your request and send a price shortly.',
+            textAlign: TextAlign.center,
+            style: context.tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,5 +1,26 @@
 import '../../../core/constants/app_constants.dart';
 
+/// A single customer-specified attribute of an order request (e.g. flavor,
+/// tiers, servings, message). Free-form key/value from the order_specs table.
+class OrderSpec {
+  const OrderSpec({required this.key, required this.value});
+
+  final String key;
+  final String value;
+
+  factory OrderSpec.fromJson(Map<String, dynamic> json) => OrderSpec(
+        key: json['key']?.toString() ?? '',
+        value: json['value']?.toString() ?? '',
+      );
+
+  /// Human-friendly label, e.g. `event_date` → "Event date".
+  String get label {
+    if (key.isEmpty) return '';
+    final words = key.replaceAll('_', ' ').trim();
+    return words[0].toUpperCase() + words.substring(1);
+  }
+}
+
 /// A custom-bake order moving through the escrow lifecycle.
 class Order {
   const Order({
@@ -18,6 +39,7 @@ class Order {
     this.totalCents,
     this.depositCents,
     this.balanceCents,
+    this.specs = const [],
   });
 
   final String id;
@@ -38,6 +60,9 @@ class Order {
   final int? depositCents;
   final int? balanceCents;
   final DateTime createdAt;
+
+  /// The customer's requested attributes (flavor, size, message…).
+  final List<OrderSpec> specs;
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
@@ -64,6 +89,10 @@ class Order {
       balanceCents: _cents(json['balance_amount']) ??
           (json['balance_cents'] as num?)?.toInt(),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      specs: (json['specs'] as List?)
+              ?.map((e) => OrderSpec.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 
