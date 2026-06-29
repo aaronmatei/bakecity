@@ -41,6 +41,27 @@ type Deps struct {
 	Redis *redis.Client // may be nil in degraded dev mode
 }
 
+// devCORS reflects the request Origin and answers preflight requests, allowing
+// a browser-based client to call the API during development. It echoes the
+// Origin (rather than "*") so credentialed requests are permitted.
+func devCORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
+
 // New builds the Gin engine, constructs the domain dependency graph, and mounts
 // all routes under /api/v1.
 func New(deps Deps) *gin.Engine {
@@ -50,6 +71,12 @@ func New(deps Deps) *gin.Engine {
 
 	r := gin.New()
 	r.Use(middleware.Recovery(), middleware.RequestID(), middleware.Logger())
+
+	// Dev-only permissive CORS so a browser-served build (Flutter web /
+	// device_preview) can call the API. Disabled in production.
+	if !deps.Cfg.IsProduction() {
+		r.Use(devCORS())
+	}
 
 	r.GET("/health", func(c *gin.Context) {
 		pkg.OK(c, gin.H{"status": "ok"})

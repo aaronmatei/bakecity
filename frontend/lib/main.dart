@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:device_preview/device_preview.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,20 +33,38 @@ Future<void> main() async {
 
   await dotenv.load(fileName: '.env');
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // Firebase isn't configured for every platform (e.g. the web/device_preview
+  // build), so initialise best-effort and continue if it's unavailable.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+    }
+  } catch (_) {
+    // Continue without Firebase (preview / unsupported platform).
+  }
 
   // Token storage requires async initialisation; inject the ready instance.
   final tokenStorage = await TokenStorage.create();
 
+  // device_preview wraps the app in selectable device frames (iPhone, etc.) for
+  // previewing on any host. Enabled only with --dart-define=DEVICE_PREVIEW=true,
+  // so normal runs are unaffected.
+  const devicePreviewEnabled = bool.fromEnvironment('DEVICE_PREVIEW');
+
   runApp(
-    ProviderScope(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(tokenStorage),
-      ],
-      child: const BakeCityApp(),
+    DevicePreview(
+      enabled: devicePreviewEnabled,
+      builder: (context) => ProviderScope(
+        overrides: [
+          tokenStorageProvider.overrideWithValue(tokenStorage),
+        ],
+        child: const BakeCityApp(),
+      ),
     ),
   );
 }
@@ -117,6 +137,9 @@ class _BakeCityAppState extends ConsumerState<BakeCityApp> {
     return MaterialApp.router(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
+      // device_preview hooks (no-ops unless the preview is enabled).
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
