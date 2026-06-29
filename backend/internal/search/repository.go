@@ -55,14 +55,13 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 	  ) rv ON rv.baker_id = bp.id
 	 WHERE bp.status = 'approved'`)
 
-	if geo {
+	// A chosen radius searches within that distance of the user. Without one we
+	// don't distance-gate at all, so browsing always surfaces approved bakers
+	// (sorted nearest-first when a location is known); whether a baker delivers
+	// to the user is a per-result detail derived from distance vs their radius.
+	if geo && q.RadiusKM != nil {
 		sb.WriteString(" AND bp.location IS NOT NULL AND ST_DWithin(bp.location, " +
-			pointExpr + ", bp.delivery_radius_km * 1000)")
-		// Optional user-chosen radius: also keep bakers within this distance.
-		if q.RadiusKM != nil {
-			sb.WriteString(" AND ST_DWithin(bp.location, " + pointExpr + ", " +
-				b.add(*q.RadiusKM*1000) + ")")
-		}
+			pointExpr + ", " + b.add(*q.RadiusKM*1000) + ")")
 	}
 	if p := productExists(b, "bp.id", q.CategorySlug, q.MinPrice, q.MaxPrice); p != "" {
 		sb.WriteString(" AND " + p)
