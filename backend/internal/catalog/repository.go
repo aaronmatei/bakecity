@@ -96,6 +96,14 @@ const imageURLsExpr = `, COALESCE(ARRAY(
 	ORDER BY pim.position
 ), '{}'::text[])`
 
+// imageMediaIDsExpr aggregates the media ids backing the image URLs in the same
+// (position) order, so an editor can preserve/reorder/remove images.
+const imageMediaIDsExpr = `, COALESCE(ARRAY(
+	SELECT pim.media_id::text FROM product_images pim
+	WHERE pim.product_id = products.id
+	ORDER BY pim.position
+), '{}'::text[])`
+
 
 // BakerIDForUser resolves the baker_profiles.id owned by userID, or ErrNotFound.
 func (r *Repository) BakerIDForUser(ctx context.Context, userID string) (string, error) {
@@ -194,8 +202,8 @@ func (r *Repository) GetProduct(ctx context.Context, id string) (*Product, error
 		return nil, pkg.ErrNotImplemented
 	}
 	var p Product
-	err := r.db.QueryRow(ctx, `SELECT `+productColumns+imageURLsExpr+` FROM products WHERE id = $1`, id).
-		Scan(append(scanProductCols(&p), &p.ImageURLs)...)
+	err := r.db.QueryRow(ctx, `SELECT `+productColumns+imageURLsExpr+imageMediaIDsExpr+` FROM products WHERE id = $1`, id).
+		Scan(append(scanProductCols(&p), &p.ImageURLs, &p.ImageMediaIDs)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -251,7 +259,7 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	q := `SELECT ` + productColumns + imageURLsExpr + ` FROM products WHERE 1 = 1`
+	q := `SELECT ` + productColumns + imageURLsExpr + imageMediaIDsExpr + ` FROM products WHERE 1 = 1`
 	args := []any{}
 	add := func(cond string, val any) {
 		args = append(args, val)
@@ -285,7 +293,7 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	out := make([]Product, 0)
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(append(scanProductCols(&p), &p.ImageURLs)...); err != nil {
+		if err := rows.Scan(append(scanProductCols(&p), &p.ImageURLs, &p.ImageMediaIDs)...); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

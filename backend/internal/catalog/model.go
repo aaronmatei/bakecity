@@ -25,9 +25,12 @@ type Product struct {
 	CakeFlavor   string        `json:"cake_flavor,omitempty"`
 	CakeFormat   string        `json:"cake_format,omitempty"`
 	ImageURLs    []string      `json:"image_urls,omitempty"`
-	Sizes        []ProductSize `json:"sizes,omitempty"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	// ImageMediaIDs are the media ids backing ImageURLs, same order — so an
+	// editor can preserve/reorder/remove images on a replace.
+	ImageMediaIDs []string      `json:"image_media_ids,omitempty"`
+	Sizes         []ProductSize `json:"sizes,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 // ProductSize is a weight/serving option with its own price (cakes are priced
