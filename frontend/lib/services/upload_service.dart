@@ -20,6 +20,7 @@ class MediaKind {
   static const String production = 'production';
   static const String deliveryProof = 'delivery_proof';
   static const String product = 'product';
+  static const String kyc = 'kyc'; // baker identity document (owner-scoped)
 }
 
 /// Presigned upload target returned by POST /media/presign.

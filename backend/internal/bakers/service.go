@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/corebalt/bakecity/internal/media"
 	"github.com/corebalt/bakecity/pkg"
 )
 
@@ -14,14 +15,16 @@ type Actor struct {
 	IsAdmin bool
 }
 
-// Service implements bakers business logic.
+// Service implements bakers business logic. It uses the media service to store
+// and read a baker's KYC identity documents.
 type Service struct {
-	repo *Repository
+	repo  *Repository
+	media *media.Service
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, mediaSvc *media.Service) *Service {
+	return &Service{repo: repo, media: mediaSvc}
 }
 
 // Create registers a new baker profile for the authenticated user.
@@ -46,18 +49,40 @@ func (s *Service) GetByUser(ctx context.Context, userID string) (*BakerProfile, 
 
 // Update modifies a baker profile; only the owner or an admin may do so.
 func (s *Service) Update(ctx context.Context, actor Actor, id string, req UpdateBakerRequest) (*BakerProfile, error) {
-	if err := s.authorize(ctx, actor, id); err != nil {
+	if _, err := s.authorize(ctx, actor, id); err != nil {
 		return nil, err
 	}
 	return s.repo.Update(ctx, id, req)
 }
 
-// SubmitKYC marks a profile's KYC as submitted; owner or admin only.
+// SubmitKYC marks a profile's KYC as submitted; owner or admin only. At least
+// one identity document must have been uploaded first, so a reviewer always has
+// something to verify.
 func (s *Service) SubmitKYC(ctx context.Context, actor Actor, id string) (*BakerProfile, error) {
-	if err := s.authorize(ctx, actor, id); err != nil {
+	profile, err := s.authorize(ctx, actor, id)
+	if err != nil {
 		return nil, err
 	}
+	docs, err := s.media.ListByOwnerKind(ctx, profile.UserID, media.KindKYC)
+	if err != nil {
+		return nil, err
+	}
+	if len(docs) == 0 {
+		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation,
+			"attach at least one identity document before submitting for review")
+	}
 	return s.repo.SubmitKYC(ctx, id)
+}
+
+// KYCDocs returns the baker's uploaded identity documents (presigned for
+// viewing); owner or admin only, so a reviewer can inspect them before
+// approving.
+func (s *Service) KYCDocs(ctx context.Context, actor Actor, id string) ([]media.Media, error) {
+	profile, err := s.authorize(ctx, actor, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.media.ListByOwnerKind(ctx, profile.UserID, media.KindKYC)
 }
 
 // GetAvailability returns the baker's scheduling parameters and blackout dates.
@@ -81,7 +106,7 @@ func (s *Service) GetAvailability(ctx context.Context, id string) (*Availability
 // SetAvailability updates scheduling parameters and replaces blackout dates;
 // owner or admin only.
 func (s *Service) SetAvailability(ctx context.Context, actor Actor, id string, req AvailabilityRequest) (*Availability, error) {
-	if err := s.authorize(ctx, actor, id); err != nil {
+	if _, err := s.authorize(ctx, actor, id); err != nil {
 		return nil, err
 	}
 	parsed := make([]parsedBlackout, 0, len(req.BlackoutDates))
@@ -98,14 +123,15 @@ func (s *Service) SetAvailability(ctx context.Context, actor Actor, id string, r
 	return s.GetAvailability(ctx, id)
 }
 
-// authorize loads the profile and ensures the actor owns it (or is an admin).
-func (s *Service) authorize(ctx context.Context, actor Actor, profileID string) error {
+// authorize loads the profile and ensures the actor owns it (or is an admin),
+// returning the loaded profile so callers can reuse it.
+func (s *Service) authorize(ctx context.Context, actor Actor, profileID string) (*BakerProfile, error) {
 	profile, err := s.repo.GetByID(ctx, profileID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if actor.IsAdmin || profile.UserID == actor.UserID {
-		return nil
+		return profile, nil
 	}
-	return pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "not the owner of this baker profile")
+	return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "not the owner of this baker profile")
 }

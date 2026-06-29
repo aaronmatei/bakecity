@@ -86,7 +86,6 @@ func New(deps Deps) *gin.Engine {
 	// Services.
 	authSvc := auth.NewService(authRepo, deps.Cfg.JWTSecret)
 	usersSvc := users.NewService(usersRepo)
-	bakersSvc := bakers.NewService(bakersRepo)
 	catalogSvc := catalog.NewService(catalogRepo)
 	searchSvc := search.NewService(searchRepo)
 	notificationsSvc := notifications.NewService(notificationsRepo, sender, hub)
@@ -96,6 +95,9 @@ func New(deps Deps) *gin.Engine {
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
 	productionSvc := production.NewService(productionRepo, ordersSvc, notificationsSvc)
 	mediaSvc := media.NewService(mediaRepo, presigner, ordersSvc)
+	// Bakers depends on media to store/read KYC identity documents, so it is
+	// constructed after mediaSvc.
+	bakersSvc := bakers.NewService(bakersRepo, mediaSvc)
 	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc, notificationsSvc)
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc, notificationsSvc)
 	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc, notificationsSvc)

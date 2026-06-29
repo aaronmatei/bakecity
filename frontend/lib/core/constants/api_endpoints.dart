@@ -27,6 +27,8 @@ class ApiEndpoints {
   static const String bakers = '/bakers';
   static String baker(String id) => '/bakers/$id';
   static String bakerVerify(String id) => '/bakers/$id/verify'; // KYC submission
+  /// A baker's submitted KYC identity documents (owner or admin).
+  static String bakerKyc(String id) => '/bakers/$id/kyc';
   static String bakerAvailability(String id) => '/bakers/$id/availability';
   static String bakerReviews(String id) => '/bakers/$id/reviews';
 

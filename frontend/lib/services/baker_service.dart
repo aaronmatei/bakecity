@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/api_endpoints.dart';
 import '../core/errors/app_exception.dart';
 import '../features/bakers/domain/my_baker_profile.dart';
+import '../features/media/domain/order_media.dart';
 import 'api_client.dart';
 
 /// Provides the [BakerService].
@@ -73,5 +74,16 @@ class BakerService {
     final response =
         await _api.post<Map<String, dynamic>>(ApiEndpoints.bakerVerify(id));
     return MyBakerProfile.fromJson(response.data!);
+  }
+
+  /// The baker's submitted KYC identity documents (owner or admin), with
+  /// presigned URLs for display.
+  Future<List<OrderMedia>> kycDocuments(String id) async {
+    final response =
+        await _api.get<Map<String, dynamic>>(ApiEndpoints.bakerKyc(id));
+    final items = (response.data?['documents'] ?? const []) as List;
+    return items
+        .map((e) => OrderMedia.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

@@ -10,6 +10,7 @@ const (
 	KindProduction    = "production"     // baker's production-stage photo
 	KindDeliveryProof = "delivery_proof" // proof-of-delivery photo
 	KindProduct       = "product"        // catalog product image
+	KindKYC           = "kyc"            // baker's identity document (owner-scoped)
 )
 
 // Media upload lifecycle statuses.

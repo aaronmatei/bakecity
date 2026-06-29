@@ -91,6 +91,35 @@ func (r *Repository) ListByOrder(ctx context.Context, orderID, kind string) ([]M
 	return out, rows.Err()
 }
 
+// ListByOwnerKind returns a user's uploaded media of a given kind that is not
+// tied to an order (owner-scoped, e.g. KYC identity documents), newest first.
+func (r *Repository) ListByOwnerKind(ctx context.Context, ownerID, kind string) ([]Media, error) {
+	if r.db == nil {
+		return nil, pkg.ErrNotImplemented
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT `+mediaColumns+` FROM media
+		  WHERE owner_id = $1 AND kind = $2 AND status = $3 AND order_id IS NULL
+		  ORDER BY created_at DESC, id DESC`,
+		ownerID, kind, StatusUploaded,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Media, 0)
+	for rows.Next() {
+		var m Media
+		if err := rows.Scan(&m.ID, &m.OrderID, &m.OwnerID, &m.Kind, &m.S3Key,
+			&m.ThumbKey, &m.Status, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // SetStatus updates a media record's lifecycle status.
 func (r *Repository) SetStatus(ctx context.Context, id, status string) error {
 	if r.db == nil {

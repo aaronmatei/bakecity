@@ -23,6 +23,7 @@ var allowedKinds = map[string]bool{
 	KindProduction:    true,
 	KindDeliveryProof: true,
 	KindProduct:       true,
+	KindKYC:           true,
 }
 
 // Actor identifies the authenticated caller for authorization checks.
@@ -100,6 +101,21 @@ func (s *Service) ListForOrder(ctx context.Context, actor Actor, orderID, kind s
 		return nil, err
 	}
 	items, err := s.repo.ListByOrder(ctx, orderID, strings.ToLower(strings.TrimSpace(kind)))
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		s.attachURLs(ctx, &items[i])
+	}
+	return items, nil
+}
+
+// ListByOwnerKind returns a user's owner-scoped media of a given kind (e.g. KYC
+// identity documents), newest first, with presigned download URLs attached.
+// Authorization is the caller's responsibility — this is used by the bakers
+// service, which gates it to the owner or an admin.
+func (s *Service) ListByOwnerKind(ctx context.Context, ownerID, kind string) ([]Media, error) {
+	items, err := s.repo.ListByOwnerKind(ctx, ownerID, strings.ToLower(strings.TrimSpace(kind)))
 	if err != nil {
 		return nil, err
 	}

@@ -26,6 +26,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/bakers/:id", h.Get)
 	rg.PATCH("/bakers/:id", h.Update)
 	rg.POST("/bakers/:id/verify", h.Verify)
+	rg.GET("/bakers/:id/kyc", h.KYCDocs)
 	rg.GET("/bakers/:id/availability", h.GetAvailability)
 	rg.PUT("/bakers/:id/availability", h.SetAvailability)
 }
@@ -97,6 +98,17 @@ func (h *Handler) Verify(c *gin.Context) {
 		return
 	}
 	pkg.OK(c, profile)
+}
+
+// KYCDocs handles GET /bakers/:id/kyc — the baker's submitted identity
+// documents, for the owner or an admin reviewer.
+func (h *Handler) KYCDocs(c *gin.Context) {
+	docs, err := h.svc.KYCDocs(c.Request.Context(), actorFrom(c), c.Param("id"))
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, gin.H{"documents": docs})
 }
 
 // GetAvailability handles GET /bakers/:id/availability.

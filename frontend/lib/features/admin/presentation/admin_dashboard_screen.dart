@@ -6,8 +6,10 @@ import '../../../core/helpers/formatters.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/media_thumbnail.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../disputes/domain/dispute.dart';
+import '../domain/baker_summary.dart';
 import '../application/admin_controller.dart';
 
 /// Admin/ops console: platform overview, baker approvals, and dispute
@@ -113,10 +115,8 @@ class _BakersTab extends ConsumerWidget {
               return ListTile(
                 title: Text(b.businessName),
                 subtitle: Text('${b.phone} • KYC: ${b.kycStatus}'),
-                trailing: FilledButton(
-                  onPressed: () => _approve(context, ref, b.id),
-                  child: const Text('Approve'),
-                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openReview(context, b),
               );
             },
           ),
@@ -125,10 +125,89 @@ class _BakersTab extends ConsumerWidget {
     );
   }
 
-  Future<void> _approve(BuildContext context, WidgetRef ref, String id) async {
+  /// Opens a review sheet showing the baker's KYC documents, with an approve
+  /// action — so a reviewer inspects the documents before approving.
+  void _openReview(BuildContext context, BakerSummary baker) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _KycReviewSheet(baker: baker),
+    );
+  }
+}
+
+/// Bottom sheet for reviewing a pending baker's KYC documents and approving.
+class _KycReviewSheet extends ConsumerWidget {
+  const _KycReviewSheet({required this.baker});
+
+  final BakerSummary baker;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final docs = ref.watch(bakerKycDocsProvider(baker.id));
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        children: [
+          Text(baker.businessName, style: theme.textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(
+            '${baker.phone}${baker.email != null ? ' • ${baker.email}' : ''}',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 20),
+          Text('Identity documents', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          docs.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => AppErrorView(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(bakerKycDocsProvider(baker.id)),
+            ),
+            data: (items) {
+              if (items.isEmpty) {
+                return const EmptyState(
+                  icon: Icons.image_not_supported_outlined,
+                  message: 'This baker has not uploaded any identity documents.',
+                );
+              }
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final m in items)
+                    MediaThumbnail(url: m.displayUrl, size: 110),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: () => _approve(context, ref),
+            icon: const Icon(Icons.verified_outlined),
+            label: const Text('Approve baker'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approve(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     try {
-      await ref.read(adminControllerProvider).approveBaker(id);
+      await ref.read(adminControllerProvider).approveBaker(baker.id);
+      navigator.pop();
       messenger.showSnackBar(const SnackBar(content: Text('Baker approved.')));
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));

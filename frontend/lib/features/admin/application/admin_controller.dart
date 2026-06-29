@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/admin_service.dart';
+import '../../../services/baker_service.dart';
 import '../../disputes/domain/dispute.dart';
+import '../../media/domain/order_media.dart';
 import '../domain/baker_summary.dart';
 import '../domain/platform_stats.dart';
 
@@ -9,6 +11,12 @@ import '../domain/platform_stats.dart';
 final pendingBakersProvider =
     FutureProvider.autoDispose<List<BakerSummary>>((ref) {
   return ref.read(adminServiceProvider).pendingBakers();
+});
+
+/// A pending baker's submitted KYC identity documents, for review.
+final bakerKycDocsProvider =
+    FutureProvider.autoDispose.family<List<OrderMedia>, String>((ref, bakerId) {
+  return ref.read(bakerServiceProvider).kycDocuments(bakerId);
 });
 
 /// Open dispute queue.

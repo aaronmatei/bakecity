@@ -6,11 +6,21 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/validators.dart';
 import '../../../routes/app_routes.dart';
+import '../../../services/upload_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
 import '../../bakers/domain/my_baker_profile.dart';
 import '../application/onboarding_controller.dart';
+
+/// A locally-picked identity document awaiting upload. [mediaId] is set once it
+/// has been uploaded, so a retried submission doesn't re-upload it.
+class _KycDoc {
+  _KycDoc({required this.bytes, required this.contentType});
+  final Uint8List bytes;
+  final String contentType;
+  String? mediaId;
+}
 
 /// Baker KYC / verification onboarding flow.
 ///
@@ -81,6 +91,9 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
   late final TextEditingController _lat;
   late final TextEditingController _lng;
 
+  final List<_KycDoc> _kycDocs = [];
+  static const int _maxKycDocs = 4;
+  bool _pickingDoc = false;
   bool _submitting = false;
 
   @override
@@ -112,11 +125,44 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
     super.dispose();
   }
 
+  Future<void> _addDoc() async {
+    if (_kycDocs.length >= _maxKycDocs) return;
+    setState(() => _pickingDoc = true);
+    try {
+      final file = await ref.read(uploadServiceProvider).pickImage();
+      if (file != null) {
+        final bytes = await file.readAsBytes();
+        setState(() => _kycDocs.add(
+              _KycDoc(bytes: bytes, contentType: file.mimeType ?? 'image/jpeg'),
+            ));
+      }
+    } finally {
+      if (mounted) setState(() => _pickingDoc = false);
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (_kycDocs.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Add at least one identity document to verify your bakery.'),
+      ));
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _submitting = true);
     try {
+      // Upload any not-yet-uploaded documents first (owner-scoped, no order).
+      // The backend rejects the submission unless a document is on file.
+      final uploader = ref.read(uploadServiceProvider);
+      for (final doc in _kycDocs) {
+        doc.mediaId ??= await uploader.uploadBytes(
+          bytes: doc.bytes,
+          contentType: doc.contentType,
+          kind: MediaKind.kyc,
+        );
+      }
       await ref.read(onboardingControllerProvider.notifier).submit(
             businessName: _businessName.text.trim(),
             bio: _bio.text.trim(),
@@ -130,8 +176,7 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
       // is replaced by the status view.
     } on AppException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -278,6 +323,40 @@ class _OnboardingFormState extends ConsumerState<_OnboardingForm> {
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
+              Text('Identity documents', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(
+                'Upload a clear photo of your national ID or business permit so '
+                'we can verify you. At least one is required.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _kycDocs.length +
+                      (_kycDocs.length < _maxKycDocs ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) {
+                    if (i == _kycDocs.length) {
+                      return _AddDocButton(
+                        busy: _pickingDoc,
+                        onTap: _pickingDoc ? null : _addDoc,
+                      );
+                    }
+                    return _DocThumb(
+                      bytes: _kycDocs[i].bytes,
+                      onRemove: _submitting
+                          ? null
+                          : () => setState(() => _kycDocs.removeAt(i)),
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 28),
               PrimaryButton(
                 label: 'Submit for review',
@@ -378,6 +457,82 @@ class _StatusView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A dashed "add document" tile shown at the end of the KYC document strip.
+class _AddDocButton extends StatelessWidget {
+  const _AddDocButton({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 96,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outline),
+        ),
+        child: Center(
+          child: busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_a_photo_outlined,
+                        color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(height: 4),
+                    Text('Add', style: theme.textTheme.labelSmall),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A picked KYC document thumbnail with a remove affordance.
+class _DocThumb extends StatelessWidget {
+  const _DocThumb({required this.bytes, required this.onRemove});
+
+  final Uint8List bytes;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(bytes, width: 96, height: 96, fit: BoxFit.cover),
+        ),
+        Positioned(
+          top: 2,
+          right: 2,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(2),
+              child: const Icon(Icons.close, size: 16, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
