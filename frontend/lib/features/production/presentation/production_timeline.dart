@@ -109,10 +109,14 @@ class ProductionTimeline extends StatelessWidget {
             ? classifyStage(latest.stage, latest.progressPct)
             : BakeStage.ingredients);
 
+    // Reaching the terminal "Ready" stage counts as complete for display, even
+    // if the order status hasn't advanced yet — so it never reads "Ready · live".
+    final complete = _complete || (started && current == BakeStage.ready);
+
     // The ring reflects the explicit progress %, but never less than the
     // current stage's baseline — so a baker who posts "Decoration" without
     // touching the slider still shows meaningful progress instead of 0%.
-    final pct = _complete
+    final pct = complete
         ? 100
         : (started
             ? math.max(latest?.progressPct ?? 0, current.baselinePct)
@@ -131,7 +135,7 @@ class ProductionTimeline extends StatelessWidget {
       children: [
         _ProgressHeader(
           pct: pct,
-          label: _complete
+          label: complete
               ? 'All done · Ready for delivery'
               : started
                   ? '$pct% · ${current.label} in progress'
@@ -141,12 +145,13 @@ class ProductionTimeline extends StatelessWidget {
         for (int i = 0; i < stages.length; i++)
           _StageRow(
             stage: stages[i],
-            state: _stateFor(i, currentIndex, started),
+            state: _stateFor(i, currentIndex, started, complete),
             update: byStage[stages[i]],
             isLast: i == stages.length - 1,
             // Live media only on the active stage.
-            media: (_stateFor(i, currentIndex, started) == _NodeState.current &&
-                    !_complete)
+            media: (_stateFor(i, currentIndex, started, complete) ==
+                        _NodeState.current &&
+                    !complete)
                 ? productionMedia
                 : const [],
           ),
@@ -154,8 +159,8 @@ class ProductionTimeline extends StatelessWidget {
     );
   }
 
-  _NodeState _stateFor(int i, int currentIndex, bool started) {
-    if (_complete) return _NodeState.completed;
+  _NodeState _stateFor(int i, int currentIndex, bool started, bool complete) {
+    if (complete) return _NodeState.completed;
     if (!started) return i == 0 ? _NodeState.current : _NodeState.future;
     if (i < currentIndex) return _NodeState.completed;
     if (i == currentIndex) return _NodeState.current;

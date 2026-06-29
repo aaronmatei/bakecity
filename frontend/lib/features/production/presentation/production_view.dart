@@ -80,10 +80,16 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
     }
     setState(() => _submitting = true);
     try {
+      // Derive the effective progress from the stage so a baker who posts e.g.
+      // "Ready" without moving the slider still sends 100% (which marks the
+      // order ready for delivery), never less than the slider value.
+      final manual = _progress.round();
+      final baseline = classifyStage(stage, manual).baselinePct;
+      final effectivePct = manual > baseline ? manual : baseline;
       await ref.read(productionControllerProvider).addUpdate(
             orderId: widget.orderId,
             stage: stage,
-            progressPct: _progress.round(),
+            progressPct: effectivePct,
             notes: _notesController.text.trim(),
             mediaId: _mediaId,
           );
