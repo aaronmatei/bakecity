@@ -3,40 +3,43 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/constants/api_endpoints.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../services/api_client.dart';
 import '../../bakers/domain/baker_profile.dart';
 
 /// Default map centre when the user's location is unavailable (Nairobi CBD).
 const LatLng kDefaultMapCenter = LatLng(-1.2921, 36.8219);
 
-/// Filter parameters for baker discovery / search.
+/// Filter parameters for baker discovery / search. Mirrors the backend's
+/// GET /search/bakers contract: `category` is a slug, and `radius_km` only
+/// applies when a location is set (null = no distance limit).
 class DiscoveryFilter {
   const DiscoveryFilter({
     this.query = '',
-    this.radiusKm = AppConstants.defaultSearchRadiusKm,
-    this.categoryId,
+    this.radiusKm,
+    this.categorySlug,
     this.latitude,
     this.longitude,
   });
 
   final String query;
-  final double radiusKm;
-  final String? categoryId;
+  final double? radiusKm;
+  final String? categorySlug;
   final double? latitude;
   final double? longitude;
 
   DiscoveryFilter copyWith({
     String? query,
     double? radiusKm,
-    String? categoryId,
+    String? categorySlug,
     double? latitude,
     double? longitude,
+    bool clearRadius = false,
+    bool clearCategory = false,
   }) {
     return DiscoveryFilter(
       query: query ?? this.query,
-      radiusKm: radiusKm ?? this.radiusKm,
-      categoryId: categoryId ?? this.categoryId,
+      radiusKm: clearRadius ? null : (radiusKm ?? this.radiusKm),
+      categorySlug: clearCategory ? null : (categorySlug ?? this.categorySlug),
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
     );
@@ -44,8 +47,8 @@ class DiscoveryFilter {
 
   Map<String, dynamic> toQueryParameters() => {
         if (query.isNotEmpty) 'q': query,
-        'radius_km': radiusKm,
-        if (categoryId != null) 'category_id': categoryId,
+        if (radiusKm != null) 'radius_km': radiusKm,
+        if (categorySlug != null) 'category': categorySlug,
         if (latitude != null) 'lat': latitude,
         if (longitude != null) 'lng': longitude,
       };

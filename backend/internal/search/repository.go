@@ -58,6 +58,11 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 	if geo {
 		sb.WriteString(" AND bp.location IS NOT NULL AND ST_DWithin(bp.location, " +
 			pointExpr + ", bp.delivery_radius_km * 1000)")
+		// Optional user-chosen radius: also keep bakers within this distance.
+		if q.RadiusKM != nil {
+			sb.WriteString(" AND ST_DWithin(bp.location, " + pointExpr + ", " +
+				b.add(*q.RadiusKM*1000) + ")")
+		}
 	}
 	if p := productExists(b, "bp.id", q.CategorySlug, q.MinPrice, q.MaxPrice); p != "" {
 		sb.WriteString(" AND " + p)

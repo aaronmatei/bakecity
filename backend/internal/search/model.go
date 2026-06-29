@@ -8,6 +8,7 @@ import "time"
 type BakerSearchQuery struct {
 	Lat          *float64
 	Lng          *float64
+	RadiusKM     *float64 // when set (with Lat/Lng), limit to bakers within this distance
 	CategorySlug string
 	MinPrice     *float64
 	MaxPrice     *float64

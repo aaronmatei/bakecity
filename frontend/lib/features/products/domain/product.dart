@@ -65,16 +65,25 @@ class Product {
 
 /// A product category for filtering / discovery.
 class Category {
-  const Category({required this.id, required this.name, this.iconUrl});
+  const Category({
+    required this.id,
+    required this.name,
+    this.slug,
+    this.iconUrl,
+  });
 
   final String id;
   final String name;
+
+  /// URL-safe key used by discovery search (`?category=<slug>`).
+  final String? slug;
   final String? iconUrl;
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
       id: json['id'].toString(),
       name: json['name'] as String? ?? '',
+      slug: json['slug'] as String?,
       iconUrl: json['icon_url'] as String?,
     );
   }
@@ -82,6 +91,7 @@ class Category {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'slug': slug,
         'icon_url': iconUrl,
       };
 }

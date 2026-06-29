@@ -10,6 +10,7 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../bakers/domain/baker_profile.dart';
+import '../../products/application/products_controller.dart';
 import '../application/discovery_controller.dart';
 
 /// Search + map of nearby bakers.
@@ -97,6 +98,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               },
             ),
           ),
+          const _DiscoveryFilterBar(),
+          const SizedBox(height: 8),
           Container(
             height: 180,
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -164,6 +167,96 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Horizontal filter row: distance radius + category chips, both wired to the
+/// active [discoveryFilterProvider].
+class _DiscoveryFilterBar extends ConsumerWidget {
+  const _DiscoveryFilterBar();
+
+  static const List<double?> _radii = [null, 2, 5, 10, 20, 50];
+
+  static String _radiusLabel(double? km) =>
+      km == null ? 'Any distance' : 'Within ${km.toInt()} km';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(discoveryFilterProvider);
+    final categories = ref.watch(categoriesProvider);
+    final notifier = ref.read(discoveryFilterProvider.notifier);
+
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          PopupMenuButton<double?>(
+            initialValue: filter.radiusKm,
+            onSelected: (value) => notifier.state =
+                filter.copyWith(radiusKm: value, clearRadius: value == null),
+            itemBuilder: (_) => [
+              for (final r in _radii)
+                PopupMenuItem(value: r, child: Text(_radiusLabel(r))),
+            ],
+            child: Chip(
+              avatar: const Icon(Icons.place_outlined, size: 18),
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_radiusLabel(filter.radiusKm)),
+                  const Icon(Icons.arrow_drop_down, size: 18),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _CategoryChip(
+            label: 'All',
+            selected: filter.categorySlug == null,
+            onSelected: () => notifier.state = filter.copyWith(clearCategory: true),
+          ),
+          ...categories.maybeWhen(
+            data: (cats) => [
+              for (final cat in cats)
+                if (cat.slug != null)
+                  _CategoryChip(
+                    label: cat.name,
+                    selected: filter.categorySlug == cat.slug,
+                    onSelected: () => notifier.state =
+                        filter.copyWith(categorySlug: cat.slug),
+                  ),
+            ],
+            orElse: () => const [],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
       ),
     );
   }

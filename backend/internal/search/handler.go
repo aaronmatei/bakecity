@@ -35,6 +35,7 @@ func (h *Handler) Bakers(c *gin.Context) {
 	q := BakerSearchQuery{
 		Lat:          floatParam(c, "lat"),
 		Lng:          floatParam(c, "lng"),
+		RadiusKM:     floatParam(c, "radius_km"),
 		CategorySlug: c.Query("category"),
 		MinPrice:     floatParam(c, "min_price"),
 		MaxPrice:     floatParam(c, "max_price"),
