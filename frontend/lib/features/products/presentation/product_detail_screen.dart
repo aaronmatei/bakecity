@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,14 +31,33 @@ class ProductDetailScreen extends ConsumerWidget {
         data: (p) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.image_outlined, size: 48),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: p.imageUrls.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: p.imageUrls.first,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        height: 200,
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        height: 200,
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image_outlined, size: 48),
+                      ),
+                    )
+                  : Container(
+                      height: 200,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.image_outlined, size: 48),
+                    ),
             ),
             const SizedBox(height: 16),
             Text(p.name, style: theme.textTheme.headlineSmall),

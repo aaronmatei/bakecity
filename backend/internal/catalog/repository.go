@@ -71,6 +71,16 @@ func (r *Repository) CreateCategory(ctx context.Context, name, slug string) (*Ca
 const productColumns = `id, baker_id, COALESCE(category_id::text, ''), title,
 	COALESCE(description, ''), base_price, lead_time_days, active, created_at, updated_at`
 
+// imageURLsExpr aggregates a product's image URLs (media.s3_key holds a full URL
+// for seeded/external images) ordered by position. Leading comma so it appends
+// to productColumns in SELECT queries.
+const imageURLsExpr = `, COALESCE(ARRAY(
+	SELECT m.s3_key FROM product_images pim
+	JOIN media m ON m.id = pim.media_id
+	WHERE pim.product_id = products.id
+	ORDER BY pim.position
+), '{}'::text[])`
+
 func scanProduct(row pgx.Row) (*Product, error) {
 	var p Product
 	err := row.Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
@@ -110,12 +120,22 @@ func (r *Repository) CreateProduct(ctx context.Context, bakerID string, req Crea
 	))
 }
 
-// GetProduct fetches a single product.
+// GetProduct fetches a single product, including its image URLs.
 func (r *Repository) GetProduct(ctx context.Context, id string) (*Product, error) {
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	return scanProduct(r.db.QueryRow(ctx, `SELECT `+productColumns+` FROM products WHERE id = $1`, id))
+	var p Product
+	err := r.db.QueryRow(ctx, `SELECT `+productColumns+imageURLsExpr+` FROM products WHERE id = $1`, id).
+		Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
+			&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt, &p.ImageURLs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, pkg.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 // ProductOwner returns the (bakerID, ownerUserID) for a product, or ErrNotFound.
@@ -139,7 +159,7 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	q := `SELECT ` + productColumns + ` FROM products WHERE 1 = 1`
+	q := `SELECT ` + productColumns + imageURLsExpr + ` FROM products WHERE 1 = 1`
 	args := []any{}
 	add := func(cond string, val any) {
 		args = append(args, val)
@@ -174,7 +194,7 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	for rows.Next() {
 		var p Product
 		if err := rows.Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
-			&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt, &p.ImageURLs); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

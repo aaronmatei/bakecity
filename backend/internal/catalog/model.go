@@ -14,6 +14,7 @@ type Product struct {
 	BasePrice    float64   `json:"base_price"`
 	LeadTimeDays int       `json:"lead_time_days"`
 	Active       bool      `json:"active"`
+	ImageURLs    []string  `json:"image_urls,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -174,7 +175,30 @@ class _ProductTile extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.cake_outlined)),
+        leading: product.imageUrls.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: product.imageUrls.first,
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => const SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) =>
+                      const CircleAvatar(child: Icon(Icons.cake_outlined)),
+                ),
+              )
+            : const CircleAvatar(child: Icon(Icons.cake_outlined)),
         title: Text(product.name),
         subtitle: Text(
           'From ${Formatters.currencyFromCents(product.basePriceCents)}',
