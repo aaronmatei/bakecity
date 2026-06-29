@@ -34,15 +34,30 @@ class QuotesController {
     required double amount,
     required double depositPct,
     DateTime? validUntil,
+    bool isFinal = false,
   }) async {
     final response = await _api.post<Map<String, dynamic>>(
       ApiEndpoints.orderQuotes(orderId),
       data: {
         'amount': amount,
         'deposit_pct': depositPct,
+        'is_final': isFinal,
         if (validUntil != null)
           'valid_until': validUntil.toUtc().toIso8601String(),
       },
+    );
+    return Quote.fromJson(response.data!);
+  }
+
+  /// Customer suggests a price during negotiation (POST /orders/:id/offers).
+  /// Moves the order into negotiation; the baker then responds with a quote.
+  Future<Quote> suggestOffer({
+    required String orderId,
+    required double amount,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      ApiEndpoints.orderOffers(orderId),
+      data: {'amount': amount},
     );
     return Quote.fromJson(response.data!);
   }

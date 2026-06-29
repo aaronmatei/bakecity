@@ -24,7 +24,8 @@ class QuoteLineItem {
       };
 }
 
-/// A baker's price quote for a custom order.
+/// A price entry on an order — either the baker's quote (acceptable by the
+/// customer) or the customer's suggested offer during negotiation.
 class Quote {
   const Quote({
     required this.id,
@@ -37,6 +38,8 @@ class Quote {
     this.leadTimeDays,
     this.lineItems = const [],
     this.expiresAt,
+    this.proposedBy = 'baker',
+    this.isFinal = false,
   });
 
   final String id;
@@ -49,6 +52,14 @@ class Quote {
   final List<QuoteLineItem> lineItems;
   final DateTime? expiresAt;
   final DateTime createdAt;
+
+  /// Who proposed this — `'baker'` (a quote) or `'customer'` (an offer).
+  final String proposedBy;
+
+  /// Whether the baker marked this as their best & final offer.
+  final bool isFinal;
+
+  bool get isCustomerOffer => proposedBy == 'customer';
 
   int get balanceCents => totalCents - depositCents;
 
@@ -77,6 +88,8 @@ class Quote {
           const [],
       expiresAt: _date(json['expires_at'] ?? json['valid_until']),
       createdAt: _date(json['created_at']) ?? DateTime.now(),
+      proposedBy: json['proposed_by'] as String? ?? 'baker',
+      isFinal: json['is_final'] as bool? ?? false,
     );
   }
 

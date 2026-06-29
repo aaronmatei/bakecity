@@ -26,6 +26,7 @@ const (
 // Notification types (the realtime events from the architecture spec §10).
 const (
 	TypeQuoteProposed    = "quote_proposed"
+	TypeOfferSuggested   = "offer_suggested"
 	TypeQuoteAccepted    = "quote_accepted"
 	TypeDepositConfirmed = "deposit_confirmed"
 	TypeProductionUpdate = "production_update"

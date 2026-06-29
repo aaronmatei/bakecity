@@ -267,6 +267,23 @@ func (s *Service) OnQuoteProposed(ctx context.Context, orderID string) error {
 	}
 }
 
+// OnCustomerOffer moves an order into NEGOTIATING when the customer suggests a
+// price (their opening offer or a counter to the baker's quote).
+func (s *Service) OnCustomerOffer(ctx context.Context, orderID string) error {
+	o, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	switch o.Status {
+	case StatusQuoteRequested, StatusQuoted:
+		return s.repo.UpdateStatus(ctx, orderID, StatusNegotiating)
+	case StatusNegotiating:
+		return nil // already negotiating; another offer is fine
+	default:
+		return pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "cannot make an offer on an order in "+o.Status)
+	}
+}
+
 // OnQuoteAccepted re-validates fulfillment, records the financial breakdown, and
 // transitions the order to APPROVED. depositPct is a percentage (0-100).
 func (s *Service) OnQuoteAccepted(ctx context.Context, orderID string, total, depositPct float64) (*Order, error) {

@@ -14,7 +14,9 @@ import '../../orders/presentation/order_request_details.dart';
 import '../domain/quote.dart';
 import '../application/quotes_controller.dart';
 
-/// Lists quotes for an order and lets the customer review and accept one.
+/// The order's price negotiation: the customer can suggest an offer, the baker
+/// quotes, the customer can counter, and the baker can send a best & final
+/// offer the customer accepts.
 class QuotesView extends ConsumerStatefulWidget {
   const QuotesView({super.key, required this.orderId});
 
@@ -29,12 +31,18 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
 
   bool get _isCustomer =>
       ref.read(authControllerProvider).user?.isCustomer ?? false;
-
   bool get _isBaker => ref.read(authControllerProvider).user?.isBaker ?? false;
 
-  bool _canQuote(OrderStatus? status) =>
-      _isBaker &&
-      (status == OrderStatus.pendingQuote || status == OrderStatus.quoted);
+  /// Both parties can negotiate while the order is still pre-acceptance.
+  bool _negotiable(OrderStatus? s) =>
+      s == OrderStatus.pendingQuote || s == OrderStatus.quoted;
+
+  void _refresh() {
+    ref.invalidate(orderQuotesProvider(widget.orderId));
+    ref.invalidate(orderDetailProvider(widget.orderId));
+  }
+
+  // ---- Baker: send / revise a quote -------------------------------------
 
   Future<void> _openQuoteForm({required bool isUpdate}) async {
     final sent = await showModalBottomSheet<bool>(
@@ -44,15 +52,15 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: _QuoteForm(
           isUpdate: isUpdate,
-          onSubmit: (amount, depositPct, validUntil) async {
+          onSubmit: (amount, depositPct, validUntil, isFinal) async {
             await ref.read(quotesControllerProvider).submitQuote(
                   orderId: widget.orderId,
                   amount: amount,
                   depositPct: depositPct,
                   validUntil: validUntil,
+                  isFinal: isFinal,
                 );
-            ref.invalidate(orderQuotesProvider(widget.orderId));
-            ref.invalidate(orderDetailProvider(widget.orderId));
+            _refresh();
           },
         ),
       ),
@@ -64,12 +72,31 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
     }
   }
 
-  Widget _sendQuoteButton({required bool isUpdate}) {
-    return FilledButton.icon(
-      onPressed: () => _openQuoteForm(isUpdate: isUpdate),
-      icon: const Icon(Icons.request_quote_outlined),
-      label: Text(isUpdate ? 'Send an updated quote' : 'Send a quote'),
+  // ---- Customer: suggest / counter an offer -----------------------------
+
+  Future<void> _openOfferForm({required bool isCounter}) async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _OfferForm(
+          isCounter: isCounter,
+          onSubmit: (amount) async {
+            await ref.read(quotesControllerProvider).suggestOffer(
+                  orderId: widget.orderId,
+                  amount: amount,
+                );
+            _refresh();
+          },
+        ),
+      ),
     );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Offer sent to the baker.')),
+      );
+    }
   }
 
   Future<void> _accept(Quote quote) async {
@@ -103,8 +130,7 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
             orderId: widget.orderId,
             quoteId: quote.id,
           );
-      ref.invalidate(orderQuotesProvider(widget.orderId));
-      ref.invalidate(orderDetailProvider(widget.orderId));
+      _refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -125,9 +151,8 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
   @override
   Widget build(BuildContext context) {
     final quotes = ref.watch(orderQuotesProvider(widget.orderId));
-    final orderStatus =
+    final status =
         ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
-    final canQuote = _canQuote(orderStatus);
 
     return quotes.when(
       loading: () => const LoadingIndicator(),
@@ -137,35 +162,56 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
       ),
       data: (list) {
         final anyAccepted = list.any((q) => q.status == QuoteStatus.accepted);
+        final negotiable = _negotiable(status) && !anyAccepted;
+        final hasBakerQuote = list.any((q) => !q.isCustomerOffer);
+
         return RefreshIndicator(
           color: context.cs.primary,
-          onRefresh: () async {
-            ref.invalidate(orderQuotesProvider(widget.orderId));
-            ref.invalidate(orderDetailProvider(widget.orderId));
-          },
+          onRefresh: () async => _refresh(),
           child: ListView(
             padding: const EdgeInsets.all(Insets.screenH),
             children: [
-              // The customer's request, so the baker knows what to price.
               OrderRequestDetails(orderId: widget.orderId),
               const SizedBox(height: Insets.lg),
-              if (canQuote) ...[
-                _sendQuoteButton(isUpdate: list.isNotEmpty),
+
+              // Role-specific action.
+              if (_isBaker && negotiable) ...[
+                FilledButton.icon(
+                  onPressed: () => _openQuoteForm(isUpdate: hasBakerQuote),
+                  icon: const Icon(Icons.request_quote_outlined),
+                  label: Text(hasBakerQuote
+                      ? 'Send an updated quote'
+                      : 'Send a quote'),
+                ),
                 const SizedBox(height: Insets.lg),
               ],
+              if (_isCustomer && negotiable) ...[
+                OutlinedButton.icon(
+                  onPressed: () => _openOfferForm(isCounter: hasBakerQuote),
+                  icon: const Icon(Icons.handshake_outlined),
+                  label: Text(hasBakerQuote
+                      ? 'Counter-offer'
+                      : 'Suggest your price'),
+                ),
+                const SizedBox(height: Insets.lg),
+              ],
+
               if (list.isEmpty)
                 _NoQuotesYet(isBaker: _isBaker)
               else
-                for (final quote in list) ...[
-                  _QuoteCard(
-                    quote: quote,
-                    isLatest: quote == list.first,
-                    anyAccepted: anyAccepted,
-                    isCustomer: _isCustomer,
-                    accepting: _acceptingId == quote.id,
-                    busy: _acceptingId != null,
-                    onAccept: () => _accept(quote),
-                  ),
+                for (final q in list) ...[
+                  if (q.isCustomerOffer)
+                    _OfferCard(quote: q, mine: _isCustomer)
+                  else
+                    _QuoteCard(
+                      quote: q,
+                      isLatest: q == list.first,
+                      anyAccepted: anyAccepted,
+                      isCustomer: _isCustomer,
+                      accepting: _acceptingId == q.id,
+                      busy: _acceptingId != null,
+                      onAccept: () => _accept(q),
+                    ),
                   const SizedBox(height: Insets.lg),
                 ],
             ],
@@ -176,30 +222,45 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
   }
 }
 
-/// Empty-state hint shown when an order has no quotes yet.
-class _NoQuotesYet extends StatelessWidget {
-  const _NoQuotesYet({required this.isBaker});
-  final bool isBaker;
+/// A customer's suggested price during negotiation.
+class _OfferCard extends StatelessWidget {
+  const _OfferCard({required this.quote, required this.mine});
+  final Quote quote;
+  final bool mine;
 
   @override
   Widget build(BuildContext context) {
     final cs = context.cs;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Insets.xl),
-      child: Column(
+    final active = quote.status == QuoteStatus.pending;
+    return Container(
+      padding: const EdgeInsets.all(Insets.lg),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: Radii.cardBorder,
+        border: active ? Border.all(color: cs.primary.withValues(alpha: 0.4)) : null,
+      ),
+      child: Row(
         children: [
-          Icon(Icons.request_quote_outlined,
-              size: 40, color: cs.onSurfaceVariant),
-          const SizedBox(height: Insets.md),
-          Text('No quotes yet', style: context.tt.titleMedium),
-          const SizedBox(height: Insets.xs),
-          Text(
-            isBaker
-                ? 'Review the request above and send the customer a price.'
-                : 'The baker will review your request and send a price shortly.',
-            textAlign: TextAlign.center,
-            style: context.tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          Icon(Icons.handshake_outlined,
+              color: active ? cs.primary : cs.onSurfaceVariant),
+          const SizedBox(width: Insets.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(mine ? 'Your suggested price' : 'Customer suggested',
+                    style: context.tt.labelMedium
+                        ?.copyWith(color: cs.onSurfaceVariant)),
+                Text(Formatters.currencyFromCents(quote.totalCents),
+                    style: context.tt.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+              ],
+            ),
           ),
+          if (!active)
+            Text('Previous',
+                style: context.tt.bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant)),
         ],
       ),
     );
@@ -264,6 +325,19 @@ class _QuoteCard extends StatelessWidget {
               _StatusChip(status: quote.status, expired: _isExpired),
             ],
           ),
+          if (quote.isFinal) ...[
+            const SizedBox(height: Insets.sm),
+            Row(
+              children: [
+                Icon(Icons.verified_outlined, size: 16, color: context.bake.berry),
+                const SizedBox(width: 4),
+                Text('Baker\'s best & final offer',
+                    style: context.tt.labelMedium?.copyWith(
+                        color: context.bake.berry,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ],
           const SizedBox(height: Insets.md),
           _Line(
             label: 'Deposit due now',
@@ -362,6 +436,103 @@ class _Line extends StatelessWidget {
   }
 }
 
+/// Customer's simple amount-only offer form.
+class _OfferForm extends StatefulWidget {
+  const _OfferForm({required this.isCounter, required this.onSubmit});
+
+  final bool isCounter;
+  final Future<void> Function(double amount) onSubmit;
+
+  @override
+  State<_OfferForm> createState() => _OfferFormState();
+}
+
+class _OfferFormState extends State<_OfferForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit(double.parse(_amount.text.trim()));
+      if (mounted) Navigator.pop(context, true);
+    } on AppException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(Insets.xl),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.isCounter ? 'Counter-offer' : 'Suggest your price',
+                  style: context.tt.titleLarge),
+              const SizedBox(height: Insets.xs),
+              Text(
+                'Tell the baker the price you have in mind. They\'ll respond '
+                'with a quote you can accept.',
+                style: context.tt.bodySmall
+                    ?.copyWith(color: context.cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: Insets.xl),
+              TextFormField(
+                controller: _amount,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Your price (KES)',
+                  prefixIcon: Icon(Icons.handshake_outlined),
+                ),
+                validator: (v) {
+                  final n = double.tryParse((v ?? '').trim());
+                  if (n == null || n <= 0) return 'Enter a price above 0';
+                  return null;
+                },
+              ),
+              const SizedBox(height: Insets.xl),
+              FilledButton.icon(
+                onPressed: _submitting ? null : _submit,
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
+                label: const Text('Send offer'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Bottom-sheet form the baker uses to propose (or revise) a quote.
 class _QuoteForm extends StatefulWidget {
   const _QuoteForm({required this.isUpdate, required this.onSubmit});
@@ -371,6 +542,7 @@ class _QuoteForm extends StatefulWidget {
     double amount,
     double depositPct,
     DateTime? validUntil,
+    bool isFinal,
   ) onSubmit;
 
   @override
@@ -382,6 +554,7 @@ class _QuoteFormState extends State<_QuoteForm> {
   final _amount = TextEditingController();
   final _depositPct = TextEditingController(text: '50');
   DateTime? _validUntil;
+  bool _isFinal = false;
   bool _submitting = false;
 
   @override
@@ -415,6 +588,7 @@ class _QuoteFormState extends State<_QuoteForm> {
         double.parse(_amount.text.trim()),
         double.parse(_depositPct.text.trim()),
         _validUntil,
+        _isFinal,
       );
       if (mounted) Navigator.pop(context, true);
     } on AppException catch (e) {
@@ -503,7 +677,16 @@ class _QuoteFormState extends State<_QuoteForm> {
                       ),
                 onTap: _pickValidUntil,
               ),
-              const SizedBox(height: Insets.xl),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isFinal,
+                onChanged: (v) => setState(() => _isFinal = v),
+                secondary: const Icon(Icons.verified_outlined),
+                title: const Text('Best & final offer'),
+                subtitle:
+                    const Text('Signals to the customer that this is your last price'),
+              ),
+              const SizedBox(height: Insets.lg),
               FilledButton.icon(
                 onPressed: _submitting ? null : _submit,
                 icon: _submitting
@@ -518,6 +701,35 @@ class _QuoteFormState extends State<_QuoteForm> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _NoQuotesYet extends StatelessWidget {
+  const _NoQuotesYet({required this.isBaker});
+  final bool isBaker;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Insets.xl),
+      child: Column(
+        children: [
+          Icon(Icons.request_quote_outlined,
+              size: 40, color: cs.onSurfaceVariant),
+          const SizedBox(height: Insets.md),
+          Text('No prices yet', style: context.tt.titleMedium),
+          const SizedBox(height: Insets.xs),
+          Text(
+            isBaker
+                ? 'Review the request above and send the customer a price.'
+                : 'Wait for the baker\'s quote, or suggest your price above.',
+            textAlign: TextAlign.center,
+            style: context.tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }

@@ -146,6 +146,7 @@ class _NotificationCard extends StatelessWidget {
 
   IconData _icon(String type) => switch (type) {
         'quote_proposed' => Icons.request_quote_outlined,
+        'offer_suggested' => Icons.handshake_outlined,
         'quote_accepted' => Icons.handshake_outlined,
         'deposit_confirmed' => Icons.verified_outlined,
         'production_update' => Icons.bakery_dining_outlined,
@@ -162,6 +163,7 @@ class _NotificationCard extends StatelessWidget {
 
   String _title(String type) => switch (type) {
         'quote_proposed' => 'Quote ready',
+        'offer_suggested' => 'New offer',
         'quote_accepted' => 'Quote accepted',
         'deposit_confirmed' => 'Deposit confirmed',
         'production_update' => 'Production update',

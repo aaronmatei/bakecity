@@ -6,7 +6,8 @@ import "testing"
 // and body (so push/SMS messages are never blank).
 func TestRenderCoversAllTypes(t *testing.T) {
 	types := []string{
-		TypeQuoteProposed, TypeQuoteAccepted, TypeDepositConfirmed, TypeProductionUpdate,
+		TypeQuoteProposed, TypeOfferSuggested, TypeQuoteAccepted, TypeDepositConfirmed,
+		TypeProductionUpdate,
 		TypeOutForDelivery, TypeDelivered, TypeOrderCompleted, TypeReviewRequest,
 		TypeDisputeRaised, TypeDisputeResolved, TypePayoutSent,
 	}

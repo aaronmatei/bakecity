@@ -57,12 +57,39 @@ func (s *Service) Propose(ctx context.Context, actor Actor, orderID string, req 
 	if err := s.orders.OnQuoteProposed(ctx, orderID); err != nil {
 		return nil, err
 	}
-	q, err := s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, validUntil)
+	q, err := s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, validUntil, ProposedByBaker, req.IsFinal)
 	if err != nil {
 		return nil, err
 	}
 	s.notify.Notify(ctx, order.CustomerID, notifications.TypeQuoteProposed,
 		map[string]any{"order_id": orderID, "quote_id": q.ID, "amount": q.Amount})
+	return q, nil
+}
+
+// SuggestOffer lets the order's customer propose a price during negotiation,
+// moving the order to NEGOTIATING. It's a non-binding suggestion — the baker
+// responds with a quote the customer can then accept.
+func (s *Service) SuggestOffer(ctx context.Context, actor Actor, orderID string, req SuggestOfferRequest) (*Quote, error) {
+	order, err := s.orders.OrderByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if !actor.IsAdmin && actor.UserID != order.CustomerID {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "only the customer can suggest an offer")
+	}
+	if err := s.orders.OnCustomerOffer(ctx, orderID); err != nil {
+		return nil, err
+	}
+	// A suggestion carries no deposit terms and never expires; the baker sets
+	// those when they respond with a quote.
+	q, err := s.repo.Create(ctx, orderID, req.Amount, 0, nil, ProposedByCustomer, false)
+	if err != nil {
+		return nil, err
+	}
+	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeOfferSuggested,
+			map[string]any{"order_id": orderID, "quote_id": q.ID, "amount": q.Amount})
+	}
 	return q, nil
 }
 
@@ -83,6 +110,9 @@ func (s *Service) Accept(ctx context.Context, actor Actor, orderID, quoteID stri
 	}
 	if q.OrderID != orderID {
 		return nil, nil, pkg.ErrNotFound
+	}
+	if q.ProposedBy != ProposedByBaker {
+		return nil, nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "only the baker's quote can be accepted; this is a customer offer")
 	}
 	if q.Status != StatusPending {
 		return nil, nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict, "quote is not pending (status: "+q.Status+")")

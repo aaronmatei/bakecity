@@ -46,8 +46,10 @@ class ApiEndpoints {
   static String order(String id) => '/orders/$id';
   static String orderCancel(String id) => '/orders/$id/cancel';
 
-  // Quotes (per order)
+  // Quotes & offers (per order)
   static String orderQuotes(String id) => '/orders/$id/quotes';
+  /// Customer's suggested price (negotiation).
+  static String orderOffers(String id) => '/orders/$id/offers';
   static String orderQuoteAccept(String orderId, String quoteId) =>
       '/orders/$orderId/quotes/$quoteId/accept';
 

@@ -23,6 +23,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/orders/:id/quotes", h.List)
 	rg.POST("/orders/:id/quotes", h.Create)
+	rg.POST("/orders/:id/offers", h.SuggestOffer)
 	rg.POST("/orders/:id/quotes/:qid/accept", h.Accept)
 }
 
@@ -51,6 +52,21 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	q, err := h.svc.Propose(c.Request.Context(), actorFrom(c), c.Param("id"), req)
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.Created(c, q)
+}
+
+// SuggestOffer handles POST /orders/:id/offers (customer price suggestion).
+func (h *Handler) SuggestOffer(c *gin.Context) {
+	var req SuggestOfferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	q, err := h.svc.SuggestOffer(c.Request.Context(), actorFrom(c), c.Param("id"), req)
 	if err != nil {
 		pkg.WriteError(c, err)
 		return

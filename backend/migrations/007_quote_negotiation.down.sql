@@ -1,0 +1,2 @@
+ALTER TABLE quotes DROP COLUMN IF EXISTS is_final;
+ALTER TABLE quotes DROP COLUMN IF EXISTS proposed_by;

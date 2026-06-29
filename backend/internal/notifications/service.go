@@ -100,6 +100,8 @@ func render(notifType string, _ map[string]any) (title, body string) {
 	switch notifType {
 	case TypeQuoteProposed:
 		return "Quote ready", "A baker has sent you a quote for your order."
+	case TypeOfferSuggested:
+		return "New offer", "The customer suggested a price for their order."
 	case TypeQuoteAccepted:
 		return "Quote accepted", "Your quote was accepted — you can start once the deposit is paid."
 	case TypeDepositConfirmed:
