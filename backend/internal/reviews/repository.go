@@ -79,6 +79,26 @@ func (r *Repository) ListByBaker(ctx context.Context, bakerID string, limit, off
 		return nil, err
 	}
 
+	// Per-star distribution over all of the baker's reviews.
+	distRows, err := r.db.Query(ctx,
+		`SELECT rating, COUNT(*) FROM reviews WHERE baker_id = $1 GROUP BY rating`, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	defer distRows.Close()
+	for distRows.Next() {
+		var star, n int
+		if err := distRows.Scan(&star, &n); err != nil {
+			return nil, err
+		}
+		if star >= 1 && star <= 5 {
+			out.Distribution[star-1] = n
+		}
+	}
+	if err := distRows.Err(); err != nil {
+		return nil, err
+	}
+
 	rows, err := r.db.Query(ctx,
 		`SELECT `+reviewColumns+` FROM reviews WHERE baker_id = $1
 		  ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`,

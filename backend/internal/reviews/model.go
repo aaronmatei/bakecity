@@ -20,7 +20,10 @@ type BakerReviews struct {
 	BakerID       string   `json:"baker_id"`
 	AverageRating float64  `json:"average_rating"`
 	Count         int      `json:"count"`
-	Reviews       []Review `json:"reviews"`
+	// Distribution holds the count of reviews per star, index 0 = 1-star … 4 =
+	// 5-star, over ALL of the baker's reviews (not just the returned page).
+	Distribution [5]int   `json:"distribution"`
+	Reviews      []Review `json:"reviews"`
 }
 
 // CreateReviewRequest is the payload for posting a review.
