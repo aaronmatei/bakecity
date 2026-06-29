@@ -5,6 +5,7 @@ class Delivery {
     required this.method,
     required this.status,
     this.courierRef,
+    this.proofMediaId,
     this.dispatchedAt,
     this.deliveredAt,
     this.confirmedAt,
@@ -14,6 +15,9 @@ class Delivery {
   final String method; // own | courier | pickup | self
   final String status; // pending | dispatched | delivered
   final String? courierRef;
+
+  /// Media id of the proof-of-delivery photo, when one was attached.
+  final String? proofMediaId;
   final DateTime? dispatchedAt;
   final DateTime? deliveredAt;
   final DateTime? confirmedAt;
@@ -27,6 +31,7 @@ class Delivery {
       method: json['method'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
       courierRef: json['courier_ref'] as String?,
+      proofMediaId: json['proof_media_id'] as String?,
       dispatchedAt: _date(json['dispatched_at']),
       deliveredAt: _date(json['delivered_at']),
       confirmedAt: _date(json['confirmed_at']),
