@@ -12,6 +12,7 @@ import '../features/bakers/presentation/baker_storefront_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
 import '../features/catalog/presentation/catalog_screen.dart';
+import '../features/catalog/presentation/manage_products_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
@@ -126,6 +127,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.favorites,
         name: AppRoutes.favoritesName,
         builder: (context, state) => const FavoritesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.manageProducts,
+        name: AppRoutes.manageProductsName,
+        builder: (context, state) => const ManageProductsScreen(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

@@ -102,6 +102,11 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: Insets.lg),
             _Group(children: [
               _SettingsTile(
+                icon: Icons.storefront_outlined,
+                label: 'Manage my menu',
+                onTap: () => context.pushNamed(AppRoutes.manageProductsName),
+              ),
+              _SettingsTile(
                 icon: Icons.account_balance_wallet_outlined,
                 label: 'Earnings & payouts',
                 onTap: () => context.pushNamed(AppRoutes.payoutsName),

@@ -143,6 +143,46 @@ final productDetailProvider =
   return Product.fromJson(response.data!);
 });
 
+/// All of a baker's own products — including inactive ones — for menu
+/// management (the public list hides inactive products).
+final bakerManageProductsProvider =
+    FutureProvider.family<List<Product>, String>((ref, bakerId) async {
+  final api = ref.watch(apiClientProvider);
+  final response = await api.get<Map<String, dynamic>>(
+    ApiEndpoints.products,
+    queryParameters: {'baker_id': bakerId, 'active': 'all', 'limit': 100},
+  );
+  final items =
+      (response.data?['data'] ?? response.data?['products'] ?? []) as List;
+  return items
+      .map((e) => Product.fromJson(e as Map<String, dynamic>))
+      .toList();
+});
+
+/// Mutations a baker makes on their own catalog.
+final catalogControllerProvider =
+    Provider<CatalogController>((ref) => CatalogController(ref));
+
+class CatalogController {
+  CatalogController(this._ref);
+  final Ref _ref;
+
+  /// Patches a product (owner-only on the backend). Pass only what changes.
+  Future<void> updateProduct(
+    String id, {
+    bool? active,
+    int? basePriceCents,
+  }) async {
+    await _ref.read(apiClientProvider).patch<Map<String, dynamic>>(
+      ApiEndpoints.product(id),
+      data: {
+        if (active != null) 'active': active,
+        if (basePriceCents != null) 'base_price': basePriceCents / 100,
+      },
+    );
+  }
+}
+
 /// Loads the product categories.
 final categoriesProvider = FutureProvider<List<Category>>((ref) async {
   final api = ref.watch(apiClientProvider);
