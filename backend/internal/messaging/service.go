@@ -65,7 +65,14 @@ func (s *Service) List(ctx context.Context, actor Actor, orderID string, limit, 
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.List(ctx, threadID, limit, offset)
+	msgs, err := s.repo.List(ctx, threadID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	// Now that this participant has opened the thread, mark the counterparty's
+	// messages as read (best-effort; a failure shouldn't block the read).
+	_ = s.repo.MarkThreadRead(ctx, threadID, actor.UserID)
+	return msgs, nil
 }
 
 // authorize permits the order's customer, its baker, or an admin.

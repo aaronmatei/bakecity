@@ -12,12 +12,13 @@ type Thread struct {
 
 // Message maps to the messages table.
 type Message struct {
-	ID        string    `json:"id"`
-	ThreadID  string    `json:"thread_id"`
-	SenderID  string    `json:"sender_id"`
-	Body      string    `json:"body"`
-	MediaID   string    `json:"media_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string     `json:"id"`
+	ThreadID  string     `json:"thread_id"`
+	SenderID  string     `json:"sender_id"`
+	Body      string     `json:"body"`
+	MediaID   string     `json:"media_id,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
 
 // SendMessageRequest is the payload for posting a message. Either body or

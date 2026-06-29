@@ -7,7 +7,7 @@ class Message {
     required this.body,
     required this.createdAt,
     this.attachmentUrls = const [],
-    this.isRead = false,
+    this.readAt,
   });
 
   final String id;
@@ -15,20 +15,25 @@ class Message {
   final String senderId;
   final String body;
   final List<String> attachmentUrls;
-  final bool isRead;
+
+  /// When the counterparty read this message; null if still unread.
+  final DateTime? readAt;
   final DateTime createdAt;
+
+  /// Whether the counterparty has read this message.
+  bool get isRead => readAt != null;
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
       id: json['id'].toString(),
-      orderId: json['order_id'].toString(),
+      orderId: (json['order_id'] ?? json['thread_id'] ?? '').toString(),
       senderId: json['sender_id'].toString(),
       body: json['body'] as String? ?? '',
       attachmentUrls: (json['attachment_urls'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],
-      isRead: json['is_read'] as bool? ?? false,
+      readAt: _date(json['read_at']),
       createdAt: _date(json['created_at']) ?? DateTime.now(),
     );
   }
@@ -39,7 +44,7 @@ class Message {
         'sender_id': senderId,
         'body': body,
         'attachment_urls': attachmentUrls,
-        'is_read': isRead,
+        'read_at': readAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
       };
 

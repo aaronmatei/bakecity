@@ -60,9 +60,9 @@ func (r *Repository) Insert(ctx context.Context, threadID, senderID, body, media
 	err := r.db.QueryRow(ctx,
 		`INSERT INTO messages (thread_id, sender_id, body, media_id)
 		 VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, '')::uuid)
-		 RETURNING id, thread_id, sender_id, COALESCE(body, ''), COALESCE(media_id::text, ''), created_at`,
+		 RETURNING id, thread_id, sender_id, COALESCE(body, ''), COALESCE(media_id::text, ''), created_at, read_at`,
 		threadID, senderID, body, mediaID,
-	).Scan(&m.ID, &m.ThreadID, &m.SenderID, &m.Body, &m.MediaID, &m.CreatedAt)
+	).Scan(&m.ID, &m.ThreadID, &m.SenderID, &m.Body, &m.MediaID, &m.CreatedAt, &m.ReadAt)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation (media_id)
 		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "media_id does not exist")
@@ -79,7 +79,7 @@ func (r *Repository) List(ctx context.Context, threadID string, limit, offset in
 		return nil, pkg.ErrNotImplemented
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT id, thread_id, sender_id, COALESCE(body, ''), COALESCE(media_id::text, ''), created_at
+		`SELECT id, thread_id, sender_id, COALESCE(body, ''), COALESCE(media_id::text, ''), created_at, read_at
 		   FROM messages WHERE thread_id = $1
 		  ORDER BY created_at ASC, id ASC
 		  LIMIT $2 OFFSET $3`,
@@ -93,10 +93,25 @@ func (r *Repository) List(ctx context.Context, threadID string, limit, offset in
 	out := make([]Message, 0)
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.ThreadID, &m.SenderID, &m.Body, &m.MediaID, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ThreadID, &m.SenderID, &m.Body, &m.MediaID, &m.CreatedAt, &m.ReadAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// MarkThreadRead stamps read_at on all messages in a thread that were NOT sent
+// by readerID and are still unread. Called when readerID opens the thread, so
+// the counterparty subsequently sees read receipts on their messages.
+func (r *Repository) MarkThreadRead(ctx context.Context, threadID, readerID string) error {
+	if r.db == nil {
+		return pkg.ErrNotImplemented
+	}
+	_, err := r.db.Exec(ctx,
+		`UPDATE messages SET read_at = now()
+		   WHERE thread_id = $1 AND sender_id <> $2 AND read_at IS NULL`,
+		threadID, readerID,
+	)
+	return err
 }
