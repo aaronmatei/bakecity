@@ -69,7 +69,22 @@ func (r *Repository) CreateCategory(ctx context.Context, name, slug string) (*Ca
 // ---- Products ----
 
 const productColumns = `id, baker_id, COALESCE(category_id::text, ''), title,
-	COALESCE(description, ''), base_price, lead_time_days, active, created_at, updated_at`
+	COALESCE(description, ''), base_price, lead_time_days, active,
+	rating_avg, rating_count, is_on_offer, discount_pct, dietary, is_custom,
+	COALESCE(subcategory_slug, ''), COALESCE(cake_occasion, ''),
+	COALESCE(cake_flavor, ''), COALESCE(cake_format, ''), created_at, updated_at`
+
+// scanProductCols lists the destination fields matching productColumns order,
+// excluding the trailing image URLs handled by callers.
+func scanProductCols(p *Product) []any {
+	return []any{
+		&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
+		&p.BasePrice, &p.LeadTimeDays, &p.Active,
+		&p.RatingAvg, &p.RatingCount, &p.IsOnOffer, &p.DiscountPct, &p.Dietary,
+		&p.IsCustom, &p.Subcategory, &p.CakeOccasion, &p.CakeFlavor, &p.CakeFormat,
+		&p.CreatedAt, &p.UpdatedAt,
+	}
+}
 
 // imageURLsExpr aggregates a product's image URLs (media.s3_key holds a full URL
 // for seeded/external images) ordered by position. Leading comma so it appends
@@ -81,18 +96,6 @@ const imageURLsExpr = `, COALESCE(ARRAY(
 	ORDER BY pim.position
 ), '{}'::text[])`
 
-func scanProduct(row pgx.Row) (*Product, error) {
-	var p Product
-	err := row.Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
-		&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, pkg.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &p, nil
-}
 
 // BakerIDForUser resolves the baker_profiles.id owned by userID, or ErrNotFound.
 func (r *Repository) BakerIDForUser(ctx context.Context, userID string) (string, error) {
@@ -107,17 +110,61 @@ func (r *Repository) BakerIDForUser(ctx context.Context, userID string) (string,
 	return id, err
 }
 
-// CreateProduct inserts a product owned by bakerID.
+// execer is satisfied by both *pgxpool.Pool and pgx.Tx.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// replaceSizes inserts a product's size rows (caller clears existing ones).
+func replaceSizes(ctx context.Context, q execer, productID string, sizes []SizeInput) error {
+	for _, s := range sizes {
+		if _, err := q.Exec(ctx,
+			`INSERT INTO product_sizes (product_id, label, weight_kg, serves, price)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			productID, s.Label, s.WeightKg, s.Serves, s.Price); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateProduct inserts a product (with its catalog attributes and sizes) owned
+// by bakerID, atomically.
 func (r *Repository) CreateProduct(ctx context.Context, bakerID string, req CreateProductRequest) (*Product, error) {
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	return scanProduct(r.db.QueryRow(ctx,
-		`INSERT INTO products (baker_id, category_id, title, description, base_price, lead_time_days)
-		 VALUES ($1, NULLIF($2, '')::uuid, $3, NULLIF($4, ''), $5, COALESCE($6, 1))
-		 RETURNING `+productColumns,
+	dietary := req.Dietary
+	if dietary == nil {
+		dietary = []string{}
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	var id string
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO products
+		  (baker_id, category_id, title, description, base_price, lead_time_days,
+		   dietary, is_custom, is_on_offer, discount_pct, cake_occasion, cake_flavor, cake_format)
+		 VALUES ($1, NULLIF($2,'')::uuid, $3, NULLIF($4,''), $5, COALESCE($6,1),
+		   $7, $8, $9, $10, NULLIF($11,''), NULLIF($12,''), NULLIF($13,''))
+		 RETURNING id`,
 		bakerID, req.CategoryID, req.Title, req.Description, req.BasePrice, req.LeadTimeDays,
-	))
+		dietary, req.IsCustom, req.IsOnOffer, req.DiscountPct,
+		req.CakeOccasion, req.CakeFlavor, req.CakeFormat,
+	).Scan(&id); err != nil {
+		return nil, err
+	}
+	if err := replaceSizes(ctx, tx, id, req.Sizes); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.GetProduct(ctx, id)
 }
 
 // GetProduct fetches a single product, including its image URLs.
@@ -127,8 +174,7 @@ func (r *Repository) GetProduct(ctx context.Context, id string) (*Product, error
 	}
 	var p Product
 	err := r.db.QueryRow(ctx, `SELECT `+productColumns+imageURLsExpr+` FROM products WHERE id = $1`, id).
-		Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
-			&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt, &p.ImageURLs)
+		Scan(append(scanProductCols(&p), &p.ImageURLs)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -218,8 +264,7 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	out := make([]Product, 0)
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
-			&p.BasePrice, &p.LeadTimeDays, &p.Active, &p.CreatedAt, &p.UpdatedAt, &p.ImageURLs); err != nil {
+		if err := rows.Scan(append(scanProductCols(&p), &p.ImageURLs)...); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -227,12 +272,24 @@ func (r *Repository) ListProducts(ctx context.Context, f ProductFilter) ([]Produ
 	return out, rows.Err()
 }
 
-// UpdateProduct applies a partial update and returns the result.
+// UpdateProduct applies a partial update (including catalog attributes and,
+// when Sizes is non-nil, a full replacement of the size set) and returns the
+// product with its images and sizes.
 func (r *Repository) UpdateProduct(ctx context.Context, id string, req UpdateProductRequest) (*Product, error) {
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	return scanProduct(r.db.QueryRow(ctx,
+	var dietary any
+	if req.Dietary != nil {
+		dietary = *req.Dietary
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op once committed
+
+	if _, err := tx.Exec(ctx,
 		`UPDATE products SET
 		    category_id    = CASE WHEN $2::text IS NULL THEN category_id ELSE NULLIF($2, '')::uuid END,
 		    title          = COALESCE($3, title),
@@ -240,11 +297,33 @@ func (r *Repository) UpdateProduct(ctx context.Context, id string, req UpdatePro
 		    base_price     = COALESCE($5, base_price),
 		    lead_time_days = COALESCE($6, lead_time_days),
 		    active         = COALESCE($7, active),
+		    dietary        = COALESCE($8, dietary),
+		    is_custom      = COALESCE($9, is_custom),
+		    is_on_offer    = COALESCE($10, is_on_offer),
+		    discount_pct   = COALESCE($11, discount_pct),
+		    cake_occasion  = COALESCE($12, cake_occasion),
+		    cake_flavor    = COALESCE($13, cake_flavor),
+		    cake_format    = COALESCE($14, cake_format),
 		    updated_at     = now()
-		  WHERE id = $1
-		RETURNING `+productColumns,
+		  WHERE id = $1`,
 		id, req.CategoryID, req.Title, req.Description, req.BasePrice, req.LeadTimeDays, req.Active,
-	))
+		dietary, req.IsCustom, req.IsOnOffer, req.DiscountPct,
+		req.CakeOccasion, req.CakeFlavor, req.CakeFormat,
+	); err != nil {
+		return nil, err
+	}
+	if req.Sizes != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM product_sizes WHERE product_id = $1`, id); err != nil {
+			return nil, err
+		}
+		if err := replaceSizes(ctx, tx, id, *req.Sizes); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.GetProduct(ctx, id)
 }
 
 // isUniqueViolation reports whether err is a Postgres unique-constraint error.
