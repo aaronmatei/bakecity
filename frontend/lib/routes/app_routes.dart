@@ -12,6 +12,8 @@ class AppRoutes {
   static const String bakerHome = '/baker';
   static const String adminHome = '/admin';
   static const String discovery = '/discovery';
+  static const String search = '/search';
+  static const String favorites = '/favorites';
   static const String notifications = '/notifications';
   static const String payouts = '/payouts';
   static const String profile = '/profile';
@@ -34,6 +36,8 @@ class AppRoutes {
   static const String bakerHomeName = 'bakerHome';
   static const String adminHomeName = 'adminHome';
   static const String discoveryName = 'discovery';
+  static const String searchName = 'search';
+  static const String favoritesName = 'favorites';
   static const String notificationsName = 'notifications';
   static const String payoutsName = 'payouts';
   static const String profileName = 'profile';

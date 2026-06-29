@@ -30,6 +30,9 @@ dependencies:
   cached_network_image: ^3.2.0
   image_picker: ^1.0.0
   video_player: ^2.8.0
+  google_fonts: ^6.1.0      # display + geometric-sans type pair
+  flutter_animate: ^4.5.0   # declarative entrance/stagger/micro-interactions
+  shimmer: ^3.0.0           # skeleton loaders for the image-forward feed
   
   # Maps
   google_maps_flutter: ^2.14.2

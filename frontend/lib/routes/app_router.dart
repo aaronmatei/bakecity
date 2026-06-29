@@ -12,7 +12,9 @@ import '../features/bakers/presentation/baker_storefront_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
+import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/search/presentation/search_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/order_request_screen.dart';
@@ -105,6 +107,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.discovery,
         name: AppRoutes.discoveryName,
         builder: (context, state) => const DiscoveryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.search,
+        name: AppRoutes.searchName,
+        builder: (context, state) => const SearchScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.favorites,
+        name: AppRoutes.favoritesName,
+        builder: (context, state) => const FavoritesScreen(),
       ),
       GoRoute(
         path: AppRoutes.notifications,
