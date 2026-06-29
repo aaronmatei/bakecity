@@ -8,6 +8,7 @@ class Product {
     this.description,
     this.categoryId,
     this.imageUrls = const [],
+    this.imageMediaIds = const [],
     this.leadTimeDays = 1,
     this.isCustomizable = true,
     this.isAvailable = true,
@@ -31,6 +32,9 @@ class Product {
   /// Starting price in minor units (cents).
   final int basePriceCents;
   final List<String> imageUrls;
+
+  /// Media ids backing [imageUrls], same order — used when editing the gallery.
+  final List<String> imageMediaIds;
   final int leadTimeDays;
   final bool isCustomizable;
   final bool isAvailable;
@@ -66,6 +70,10 @@ class Product {
       basePriceCents: basePrice != null
           ? (basePrice * 100).round()
           : (json['base_price_cents'] as num?)?.toInt() ?? 0,
+      imageMediaIds: (json['image_media_ids'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       imageUrls:
           (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
               const [],

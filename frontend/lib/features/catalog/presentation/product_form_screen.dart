@@ -22,6 +22,14 @@ String _pretty(String s) {
   return w[0].toUpperCase() + w.substring(1);
 }
 
+/// A photo in the gallery editor: [url] is set for an existing image (display);
+/// null for one just uploaded this session (shown as a ready tile).
+class _GalleryImage {
+  _GalleryImage(this.mediaId, this.url);
+  final String mediaId;
+  final String? url;
+}
+
 /// One editable weight/serving row in the sizes editor.
 class _SizeRow {
   _SizeRow({String label = '', String serves = '', String price = ''})
@@ -64,7 +72,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _format;
   late Set<String> _dietary;
   late List<_SizeRow> _sizes;
-  String? _newImageMediaId;
+  late List<_GalleryImage> _images;
   bool _uploadingImage = false;
   bool _saving = false;
 
@@ -94,6 +102,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             serves: s.serves?.toString() ?? '',
             price: (s.priceCents / 100).toStringAsFixed(0)),
     ];
+    _images = [
+      for (var i = 0; i < (p?.imageMediaIds.length ?? 0); i++)
+        _GalleryImage(
+          p!.imageMediaIds[i],
+          i < p.imageUrls.length ? p.imageUrls[i] : null,
+        ),
+    ];
   }
 
   @override
@@ -116,7 +131,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       final id = await ref
           .read(uploadServiceProvider)
           .pickAndUpload(kind: MediaKind.product);
-      if (id != null) setState(() => _newImageMediaId = id);
+      if (id != null) setState(() => _images.add(_GalleryImage(id, null)));
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
@@ -174,8 +189,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFlavor: cakes ? _flavor : null,
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
-          imageMediaIds:
-              _newImageMediaId != null ? [_newImageMediaId!] : null,
+          imageMediaIds: _images.map((e) => e.mediaId).toList(),
         );
       } else {
         await ctrl.createProduct(
@@ -191,8 +205,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFlavor: cakes ? _flavor : null,
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
-          imageMediaIds:
-              _newImageMediaId != null ? [_newImageMediaId!] : const [],
+          imageMediaIds: _images.map((e) => e.mediaId).toList(),
         );
       }
       ref.invalidate(bakerManageProductsProvider(widget.bakerId));
@@ -374,61 +387,126 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Widget _imageSection() {
     final cs = context.cs;
-    final existing = widget.product?.imageUrls ?? const <String>[];
-    final hasExisting = existing.isNotEmpty;
-    return PressScale(
-      onTap: _uploadingImage ? null : _pickImage,
-      child: Container(
-        height: 170,
-        width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: Radii.cardBorder,
-          border: Border.all(color: cs.outlineVariant),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            if (_newImageMediaId == null && hasExisting)
-              NetworkPhoto(
-                  url: existing.first,
-                  height: 170,
-                  width: double.infinity,
-                  radius: 0)
-            else if (_newImageMediaId != null)
-              Center(
-                  child: Icon(Icons.check_circle,
-                      size: 44, color: context.bake.success))
-            else
-              Center(
-                  child: Icon(Icons.add_a_photo_outlined,
-                      size: 36, color: cs.onSurfaceVariant)),
+            Text('Photos', style: context.tt.titleMedium),
+            const Spacer(),
             if (_uploadingImage)
-              Container(
-                color: Colors.black26,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                color: Colors.black.withValues(alpha: 0.45),
-                child: Text(
-                  _newImageMediaId != null
-                      ? 'New photo ready — tap to change'
-                      : hasExisting
-                          ? 'Tap to replace photo'
-                          : 'Tap to add a photo',
-                  textAlign: TextAlign.center,
-                  style: context.tt.labelMedium?.copyWith(color: Colors.white),
-                ),
-              ),
-            ),
+              const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
           ],
         ),
+        const SizedBox(height: Insets.sm),
+        if (_images.isEmpty)
+          PressScale(
+            onTap: _uploadingImage ? null : _pickImage,
+            child: Container(
+              height: 150,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: Radii.cardBorder,
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_a_photo_outlined,
+                      size: 34, color: cs.onSurfaceVariant),
+                  const SizedBox(height: Insets.xs),
+                  Text('Add a photo',
+                      style: context.tt.labelLarge
+                          ?.copyWith(color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          )
+        else ...[
+          SizedBox(
+            height: 100,
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              proxyDecorator: (child, _, __) => child,
+              itemCount: _images.length,
+              onReorderItem: (oldI, newI) => setState(() {
+                _images.insert(newI, _images.removeAt(oldI));
+              }),
+              itemBuilder: (context, i) =>
+                  _thumb(_images[i], i, key: ValueKey(_images[i].mediaId)),
+            ),
+          ),
+          const SizedBox(height: Insets.xs),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _uploadingImage ? null : _pickImage,
+                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                label: const Text('Add photo'),
+              ),
+              const Spacer(),
+              Text('First is the cover · drag to reorder',
+                  style: context.tt.bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _thumb(_GalleryImage img, int i, {required Key key}) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(right: Insets.sm),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          img.url != null
+              ? NetworkPhoto(
+                  url: img.url, width: 88, height: 88, radius: Radii.chip)
+              : Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: context.bake.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(Radii.chip),
+                  ),
+                  child: Icon(Icons.check_circle,
+                      color: context.bake.success, size: 30),
+                ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: GestureDetector(
+              onTap: () => setState(() => _images.removeAt(i)),
+              child: const CircleAvatar(
+                radius: 11,
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+          if (i == 0)
+            Positioned(
+              bottom: 4,
+              left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('Cover',
+                    style: context.tt.labelSmall
+                        ?.copyWith(color: Colors.white, fontSize: 10)),
+              ),
+            ),
+        ],
       ),
     );
   }
