@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
@@ -31,7 +32,6 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
 
   bool get _isBaker => ref.read(authControllerProvider).user?.isBaker ?? false;
 
-  /// The baker may quote only while the order is still in negotiation.
   bool _canQuote(OrderStatus? status) =>
       _isBaker &&
       (status == OrderStatus.pendingQuote || status == OrderStatus.quoted);
@@ -78,7 +78,7 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
       builder: (ctx) => AlertDialog(
         title: const Text('Accept this quote?'),
         content: Text(
-          'You’ll pay a deposit of '
+          'You\'ll pay a deposit of '
           '${Formatters.currencyFromCents(quote.depositCents)} to confirm your '
           'order. The ${Formatters.currencyFromCents(quote.balanceCents)} '
           'balance is due after delivery.',
@@ -103,7 +103,6 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
             orderId: widget.orderId,
             quoteId: quote.id,
           );
-      // The order advances to APPROVED and a deposit becomes due — refresh both.
       ref.invalidate(orderQuotesProvider(widget.orderId));
       ref.invalidate(orderDetailProvider(widget.orderId));
       if (mounted) {
@@ -145,13 +144,15 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
             children: [
               if (canQuote)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(
+                      Insets.screenH, Insets.screenH, Insets.screenH, 0),
                   child: _sendQuoteButton(isUpdate: false),
                 ),
               const Expanded(
                 child: EmptyState(
                   icon: Icons.request_quote_outlined,
-                  message: 'No quotes yet. The baker will send one shortly.',
+                  title: 'No quotes yet',
+                  message: 'The baker will send you a price shortly.',
                 ),
               ),
             ],
@@ -159,14 +160,15 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
         }
 
         return RefreshIndicator(
+          color: context.cs.primary,
           onRefresh: () async {
             ref.invalidate(orderQuotesProvider(widget.orderId));
             ref.invalidate(orderDetailProvider(widget.orderId));
           },
           child: ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(Insets.screenH),
             itemCount: list.length + (canQuote ? 1 : 0),
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
             itemBuilder: (context, i) {
               if (canQuote && i == 0) {
                 return _sendQuoteButton(isUpdate: true);
@@ -174,8 +176,6 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
               final quote = list[i - (canQuote ? 1 : 0)];
               return _QuoteCard(
                 quote: quote,
-                // The newest quote is first; only it is actionable, and only
-                // while nothing else has been accepted yet.
                 isLatest: quote == list.first,
                 anyAccepted: anyAccepted,
                 isCustomer: _isCustomer,
@@ -227,88 +227,88 @@ class _QuoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final cs = context.cs;
+    return Container(
+      padding: const EdgeInsets.all(Insets.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: Radii.cardBorder,
+        boxShadow: context.bake.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                Formatters.currencyFromCents(quote.totalCents),
+                style: context.tt.headlineSmall,
+              ),
+              _StatusChip(status: quote.status, expired: _isExpired),
+            ],
+          ),
+          const SizedBox(height: Insets.md),
+          _Line(
+            label: 'Deposit due now',
+            value: '${Formatters.currencyFromCents(quote.depositCents)}'
+                '${_depositPct > 0 ? ' ($_depositPct%)' : ''}',
+            emphasize: true,
+          ),
+          _Line(
+            label: 'Balance after delivery',
+            value: Formatters.currencyFromCents(quote.balanceCents),
+          ),
+          if (quote.leadTimeDays != null)
+            _Line(label: 'Lead time', value: '${quote.leadTimeDays} day(s)'),
+          if (quote.expiresAt != null)
+            _Line(
+              label: _isExpired ? 'Expired' : 'Valid until',
+              value: Formatters.eventDate(quote.expiresAt!),
+            ),
+          if (quote.notes != null && quote.notes!.isNotEmpty) ...[
+            const SizedBox(height: Insets.sm),
+            Text(quote.notes!, style: context.tt.bodyMedium),
+          ],
+          if (_canAccept) ...[
+            const SizedBox(height: Insets.lg),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onAccept,
+                icon: accepting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check),
+                label: const Text('Accept quote'),
+              ),
+            ),
+          ] else if (quote.status == QuoteStatus.accepted) ...[
+            const SizedBox(height: Insets.md),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  Formatters.currencyFromCents(quote.totalCents),
-                  style: theme.textTheme.headlineSmall,
+                Icon(Icons.check_circle, size: 18, color: context.bake.success),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Accepted — pay your deposit on the Payment tab.',
+                    style: context.tt.bodySmall,
+                  ),
                 ),
-                _StatusChip(status: quote.status, expired: _isExpired),
               ],
             ),
-            const SizedBox(height: 12),
-            _Line(
-              label: 'Deposit due now',
-              value: '${Formatters.currencyFromCents(quote.depositCents)}'
-                  '${_depositPct > 0 ? ' ($_depositPct%)' : ''}',
-              emphasize: true,
+          ] else if (isCustomer && !anyAccepted && _isExpired) ...[
+            const SizedBox(height: Insets.sm),
+            Text(
+              'This quote is no longer valid. Ask the baker for an updated one.',
+              style: context.tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
-            _Line(
-              label: 'Balance after delivery',
-              value: Formatters.currencyFromCents(quote.balanceCents),
-            ),
-            if (quote.leadTimeDays != null)
-              _Line(label: 'Lead time', value: '${quote.leadTimeDays} day(s)'),
-            if (quote.expiresAt != null)
-              _Line(
-                label: _isExpired ? 'Expired' : 'Valid until',
-                value: Formatters.eventDate(quote.expiresAt!),
-              ),
-            if (quote.notes != null && quote.notes!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(quote.notes!, style: theme.textTheme.bodyMedium),
-            ],
-            if (_canAccept) ...[
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: busy ? null : onAccept,
-                  icon: accepting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.check),
-                  label: const Text('Accept quote'),
-                ),
-              ),
-            ] else if (quote.status == QuoteStatus.accepted) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.check_circle,
-                      size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Accepted — pay your deposit on the Payment tab.',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (isCustomer && !anyAccepted && _isExpired) ...[
-              const SizedBox(height: 8),
-              Text(
-                'This quote is no longer valid. Ask the baker for an updated one.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -327,20 +327,18 @@ class _Line extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              )),
+              style: context.tt.bodyMedium
+                  ?.copyWith(color: context.cs.onSurfaceVariant)),
           Text(
             value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+            style: context.tt.bodyMedium?.copyWith(
+              fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
         ],
@@ -388,7 +386,6 @@ class _QuoteFormState extends State<_QuoteForm> {
       helpText: 'Quote valid until',
     );
     if (picked != null) {
-      // Hold the quote open until the end of the chosen day.
       setState(() =>
           _validUntil = DateTime(picked.year, picked.month, picked.day, 23, 59));
     }
@@ -429,10 +426,9 @@ class _QuoteFormState extends State<_QuoteForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(Insets.xl),
         child: Form(
           key: _formKey,
           child: Column(
@@ -441,16 +437,15 @@ class _QuoteFormState extends State<_QuoteForm> {
             children: [
               Text(
                 widget.isUpdate ? 'Send an updated quote' : 'Send a quote',
-                style: theme.textTheme.titleLarge,
+                style: context.tt.titleLarge,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: Insets.xs),
               Text(
                 'The customer reviews and accepts before paying a deposit.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                style: context.tt.bodySmall
+                    ?.copyWith(color: context.cs.onSurfaceVariant),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: Insets.xl),
               TextFormField(
                 controller: _amount,
                 keyboardType:
@@ -464,7 +459,7 @@ class _QuoteFormState extends State<_QuoteForm> {
                 ),
                 validator: _validateAmount,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: Insets.lg),
               TextFormField(
                 controller: _depositPct,
                 keyboardType: TextInputType.number,
@@ -476,7 +471,7 @@ class _QuoteFormState extends State<_QuoteForm> {
                 ),
                 validator: _validatePct,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: Insets.sm),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.event_outlined),
@@ -493,7 +488,7 @@ class _QuoteFormState extends State<_QuoteForm> {
                       ),
                 onTap: _pickValidUntil,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: Insets.xl),
               FilledButton.icon(
                 onPressed: _submitting ? null : _submit,
                 icon: _submitting
@@ -521,42 +516,25 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (String label, Color bg, Color fg) = switch (status) {
-      QuoteStatus.accepted => (
-          'Accepted',
-          Colors.green.withValues(alpha: 0.15),
-          Colors.green.shade800,
-        ),
-      QuoteStatus.pending when !expired => (
-          'New',
-          theme.colorScheme.primaryContainer,
-          theme.colorScheme.onPrimaryContainer,
-        ),
-      QuoteStatus.declined => (
-          'Declined',
-          theme.colorScheme.surfaceContainerHighest,
-          theme.colorScheme.onSurfaceVariant,
-        ),
-      _ => (
-          'Expired',
-          theme.colorScheme.surfaceContainerHighest,
-          theme.colorScheme.onSurfaceVariant,
-        ),
+    final cs = context.cs;
+    final bake = context.bake;
+    final (String label, Color color) = switch (status) {
+      QuoteStatus.accepted => ('Accepted', bake.success),
+      QuoteStatus.pending when !expired => ('New', cs.primary),
+      QuoteStatus.declined => ('Declined', cs.onSurfaceVariant),
+      _ => ('Expired', cs.onSurfaceVariant),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 4),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: Radii.chipBorder,
       ),
       child: Text(
         label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-        ),
+        style: context.tt.labelSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w700),
       ),
     );
   }

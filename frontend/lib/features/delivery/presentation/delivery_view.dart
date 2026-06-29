@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../services/upload_service.dart';
 import '../../../widgets/app_error_view.dart';
+import '../../../widgets/info_note.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/media_thumbnail.dart';
 import '../../../widgets/primary_button.dart';
@@ -15,10 +17,6 @@ import '../application/delivery_controller.dart';
 import '../domain/delivery.dart';
 
 /// Delivery dispatch + proof-of-delivery confirmation for an order.
-///
-/// The baker dispatches, then marks the order delivered by attaching a
-/// drop-off photo; alternatively the customer confirms receipt. Either path
-/// reaches DELIVERED and issues the balance invoice.
 class DeliveryView extends ConsumerStatefulWidget {
   const DeliveryView({super.key, required this.orderId});
 
@@ -110,10 +108,10 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
         onRetry: () => ref.invalidate(orderDeliveryProvider(widget.orderId)),
       ),
       data: (delivery) => ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(Insets.screenH),
         children: [
           _statusCard(delivery, proofUrl),
-          const SizedBox(height: 16),
+          const SizedBox(height: Insets.lg),
           if (isBaker)
             ..._bakerActions(delivery, orderStatus)
           else
@@ -124,47 +122,62 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
   }
 
   Widget _statusCard(Delivery? d, String? proofUrl) {
-    final String subtitle;
-    if (d == null) {
-      subtitle = 'Not yet dispatched';
-    } else if (d.isDelivered) {
-      subtitle = 'Delivered';
-    } else if (d.isDispatched) {
-      subtitle = 'Out for delivery (${d.method})';
-    } else {
-      subtitle = 'Pending';
-    }
-    return Card(
+    final cs = context.cs;
+    final (IconData icon, String subtitle, Color tone) = d == null
+        ? (Icons.local_shipping_outlined, 'Not yet dispatched', cs.onSurfaceVariant)
+        : d.isDelivered
+            ? (Icons.check_circle_outline, 'Delivered', context.bake.success)
+            : d.isDispatched
+                ? (Icons.local_shipping_outlined,
+                    'Out for delivery (${d.method})', cs.primary)
+                : (Icons.schedule_outlined, 'Pending', cs.onSurfaceVariant);
+
+    return Container(
+      padding: const EdgeInsets.all(Insets.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: Radii.cardBorder,
+        boxShadow: context.bake.cardShadow,
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListTile(
-            leading: const Icon(Icons.local_shipping_outlined),
-            title: const Text('Delivery status'),
-            subtitle: Text(subtitle),
-          ),
-          if (proofUrl != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
+          Row(
+            children: [
+              Icon(icon, color: tone),
+              const SizedBox(width: Insets.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MediaThumbnail(url: proofUrl, size: 64),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Proof of delivery',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
+                  Text('Delivery status',
+                      style: context.tt.labelMedium
+                          ?.copyWith(color: cs.onSurfaceVariant)),
+                  Text(subtitle,
+                      style: context.tt.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
+            ],
+          ),
+          if (proofUrl != null) ...[
+            const SizedBox(height: Insets.lg),
+            Row(
+              children: [
+                MediaThumbnail(url: proofUrl, size: 64),
+                const SizedBox(width: Insets.md),
+                Expanded(
+                  child: Text('Proof of delivery',
+                      style: context.tt.bodyMedium),
+                ),
+              ],
             ),
+          ],
         ],
       ),
     );
   }
 
   List<Widget> _bakerActions(Delivery? d, OrderStatus? status) {
-    // READY: dispatch. OUT_FOR_DELIVERY: mark delivered with a proof photo.
     if (status == OrderStatus.ready) {
       return [
         DropdownButtonFormField<String>(
@@ -176,14 +189,14 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
           ],
           onChanged: _busy ? null : (v) => setState(() => _method = v ?? 'own'),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: Insets.sm),
         TextField(
           controller: _courierRefController,
           decoration: const InputDecoration(
             labelText: 'Courier reference (optional)',
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: Insets.lg),
         PrimaryButton(
           label: 'Mark as dispatched',
           icon: Icons.send_outlined,
@@ -204,12 +217,12 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
 
     if (status == OrderStatus.dispatched) {
       return [
-        const _Hint(
+        const InfoNote(
           icon: Icons.photo_camera_outlined,
           text: 'Attach a drop-off photo to mark this order delivered. '
               '(The customer can also confirm receipt themselves.)',
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: Insets.md),
         OutlinedButton.icon(
           onPressed: _busy || _uploadingProof ? null : _attachProof,
           icon: _uploadingProof
@@ -224,7 +237,7 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
           label: Text(
               _proofMediaId == null ? 'Attach proof photo' : 'Proof attached'),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: Insets.md),
         PrimaryButton(
           label: 'Mark as delivered',
           icon: Icons.check_circle_outline,
@@ -235,7 +248,7 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     }
 
     return [
-      _Hint(
+      InfoNote(
         icon: status == OrderStatus.delivered || status == OrderStatus.completed
             ? Icons.check_circle_outline
             : Icons.timelapse_outlined,
@@ -249,22 +262,24 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
 
   Widget _customerActions(Delivery? d, OrderStatus? status) {
     final delivered = d?.isDelivered == true || status == OrderStatus.delivered;
-    // The customer confirms receipt only once the order is out for delivery.
     final canConfirm = status == OrderStatus.dispatched && !delivered;
 
     if (delivered) {
-      return const _Hint(
+      return const InfoNote(
         icon: Icons.check_circle_outline,
-        text: 'You’ve confirmed receipt. Thanks!',
+        text: 'You\'ve confirmed receipt. Thanks!',
       );
     }
     if (!canConfirm) {
-      return const _Hint(
+      return const InfoNote(
         icon: Icons.local_shipping_outlined,
         text: 'You can confirm receipt once the baker dispatches your order.',
       );
     }
-    return OutlinedButton.icon(
+    return PrimaryButton(
+      label: 'Confirm receipt',
+      icon: Icons.check_circle_outline,
+      isLoading: _busy,
       onPressed: _busy
           ? null
           : () => _run(
@@ -273,35 +288,6 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
                     .confirm(orderId: widget.orderId),
                 'Receipt confirmed.',
               ),
-      icon: const Icon(Icons.check_circle_outline),
-      label: const Text('Confirm receipt'),
-    );
-  }
-}
-
-/// A small contextual hint row used when no action is currently available.
-class _Hint extends StatelessWidget {
-  const _Hint({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
-        ],
-      ),
     );
   }
 }
