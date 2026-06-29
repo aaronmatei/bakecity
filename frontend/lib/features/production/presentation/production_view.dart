@@ -5,11 +5,14 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../media/application/media_controller.dart';
+import '../../media/domain/order_media.dart';
 import '../../orders/application/orders_controller.dart';
+import '../../../services/upload_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
-import '../../../services/upload_service.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/media_thumbnail.dart';
 import '../../../widgets/primary_button.dart';
 import '../application/production_controller.dart';
 
@@ -61,6 +64,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
         _progress = 0;
         _mediaId = null;
       });
+      ref.invalidate(orderMediaProvider(widget.orderId));
       messenger.showSnackBar(const SnackBar(content: Text('Update posted.')));
     } on AppException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -79,6 +83,7 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
           );
       if (mediaId != null) {
         setState(() => _mediaId = mediaId);
+        ref.invalidate(orderMediaProvider(widget.orderId));
         messenger.showSnackBar(const SnackBar(content: Text('Photo attached.')));
       }
     } on AppException catch (e) {
@@ -95,16 +100,27 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
         ref.watch(authControllerProvider).user?.role == UserRole.baker;
     final orderStatus =
         ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
+    final media = ref.watch(orderMediaProvider(widget.orderId)).valueOrNull ??
+        const <OrderMedia>[];
     // The backend accepts production updates only while DEPOSIT_PAID (starts
     // production) or IN_PRODUCTION.
     final canPost = isBaker &&
         (orderStatus == OrderStatus.depositPaid ||
             orderStatus == OrderStatus.inProduction);
 
+    final references =
+        media.where((m) => m.kind == MediaKind.reference).toList();
+    // Map each production photo by its media id so updates can show their image.
+    final productionPhotos = {
+      for (final m in media)
+        if (m.kind == MediaKind.production) m.id: m,
+    };
+
     return Column(
       children: [
         if (isBaker && orderStatus != null)
           _ProductionBanner(status: orderStatus),
+        if (references.isNotEmpty) _ReferenceStrip(references: references),
         Expanded(
           child: updates.when(
             loading: () => const LoadingIndicator(),
@@ -126,6 +142,9 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                 itemBuilder: (context, i) {
                   final u = items[i];
                   final hasNotes = u.notes != null && u.notes!.isNotEmpty;
+                  final photo = u.mediaId == null
+                      ? null
+                      : productionPhotos[u.mediaId];
                   return ListTile(
                     leading: CircleAvatar(child: Text('${u.progressPct}%')),
                     title: Text(u.stage),
@@ -136,6 +155,9 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
                       ].join('\n'),
                     ),
                     isThreeLine: hasNotes,
+                    trailing: photo != null
+                        ? MediaThumbnail(url: photo.displayUrl, size: 56)
+                        : null,
                   );
                 },
               );
@@ -214,6 +236,39 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A horizontal strip of the customer's reference photos, shown above the
+/// timeline so the baker can see what to make.
+class _ReferenceStrip extends StatelessWidget {
+  const _ReferenceStrip({required this.references});
+
+  final List<OrderMedia> references;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Reference photos', style: theme.textTheme.labelLarge),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: references.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) =>
+                  MediaThumbnail(url: references[i].displayUrl, size: 72),
+            ),
+          ),
+        ],
       ),
     );
   }

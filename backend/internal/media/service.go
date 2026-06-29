@@ -14,6 +14,9 @@ import (
 // presignTTL is how long an issued upload URL stays valid.
 const presignTTL = 15 * time.Minute
 
+// downloadTTL is how long an issued download (view) URL stays valid.
+const downloadTTL = 1 * time.Hour
+
 // allowedKinds is the set of acceptable media purposes.
 var allowedKinds = map[string]bool{
 	KindReference:     true,
@@ -96,7 +99,27 @@ func (s *Service) ListForOrder(ctx context.Context, actor Actor, orderID, kind s
 	if err := s.authorizeParticipant(ctx, actor, order); err != nil {
 		return nil, err
 	}
-	return s.repo.ListByOrder(ctx, orderID, strings.ToLower(strings.TrimSpace(kind)))
+	items, err := s.repo.ListByOrder(ctx, orderID, strings.ToLower(strings.TrimSpace(kind)))
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		s.attachURLs(ctx, &items[i])
+	}
+	return items, nil
+}
+
+// attachURLs resolves short-lived presigned download URLs for a media record's
+// full image and thumbnail (best-effort; a failure leaves the URL empty).
+func (s *Service) attachURLs(ctx context.Context, m *Media) {
+	if url, err := s.presigner.PresignDownload(ctx, m.S3Key, downloadTTL); err == nil {
+		m.URL = url
+	}
+	if m.ThumbKey != "" {
+		if url, err := s.presigner.PresignDownload(ctx, m.ThumbKey, downloadTTL); err == nil {
+			m.ThumbURL = url
+		}
+	}
 }
 
 // authorizeParticipant allows the order's customer, the order's baker, or an

@@ -9,11 +9,14 @@ import (
 	"time"
 )
 
-// Presigner issues short-lived URLs for direct-to-bucket uploads.
+// Presigner issues short-lived URLs for direct-to-bucket uploads and reads.
 type Presigner interface {
 	// PresignUpload returns a URL the client can PUT object bytes to. The URL
 	// authorizes an upload of contentType to key and expires after expiry.
 	PresignUpload(ctx context.Context, key, contentType string, expiry time.Duration) (string, error)
+	// PresignDownload returns a URL the client can GET the object bytes from
+	// (e.g. to display an image). It expires after expiry.
+	PresignDownload(ctx context.Context, key string, expiry time.Duration) (string, error)
 }
 
 // StubPresigner is a development Presigner. It builds a plausible S3-style URL
@@ -42,6 +45,19 @@ var _ Presigner = (*StubPresigner)(nil)
 func (p *StubPresigner) PresignUpload(_ context.Context, key, _ string, expiry time.Duration) (string, error) {
 	return fmt.Sprintf(
 		"https://%s.s3.%s.amazonaws.com/%s?X-Amz-Algorithm=STUB&X-Amz-Expires=%d&X-Amz-SignedHeaders=host&X-Amz-Signature=stub-no-real-upload",
+		p.bucket, p.region, key, int(expiry.Seconds()),
+	), nil
+}
+
+// PresignDownload returns a stub presigned GET URL. It points at a plausible
+// S3 object location but signs nothing, so the bytes won't actually load until
+// a real presigner is configured. Empty key yields an empty URL.
+func (p *StubPresigner) PresignDownload(_ context.Context, key string, expiry time.Duration) (string, error) {
+	if key == "" {
+		return "", nil
+	}
+	return fmt.Sprintf(
+		"https://%s.s3.%s.amazonaws.com/%s?X-Amz-Algorithm=STUB&X-Amz-Expires=%d&X-Amz-SignedHeaders=host&X-Amz-Signature=stub-no-real-download",
 		p.bucket, p.region, key, int(expiry.Seconds()),
 	), nil
 }

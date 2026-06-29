@@ -19,7 +19,8 @@ const (
 	StatusReady    = "ready"    // processed (e.g. thumbnailed) and servable
 )
 
-// Media maps to the media table.
+// Media maps to the media table. URL and ThumbURL are not stored; they are
+// short-lived presigned download URLs resolved when the record is served.
 type Media struct {
 	ID        string    `json:"id"`
 	OrderID   string    `json:"order_id,omitempty"`
@@ -28,6 +29,8 @@ type Media struct {
 	S3Key     string    `json:"s3_key"`
 	ThumbKey  string    `json:"thumb_key,omitempty"`
 	Status    string    `json:"status"`
+	URL       string    `json:"url,omitempty"`
+	ThumbURL  string    `json:"thumb_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
