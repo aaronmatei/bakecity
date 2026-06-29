@@ -15,6 +15,10 @@ import (
 const webhookScope = "psp_webhook"
 const payoutScope = "payout"
 
+// pspStatusSucceeded is the terminal "paid" status a PSP reports for a
+// collection, both inline (synchronous) and via webhook.
+const pspStatusSucceeded = "succeeded"
+
 // Actor identifies the authenticated caller for authorization checks.
 type Actor struct {
 	UserID  string
@@ -111,6 +115,17 @@ func (s *Service) initiate(ctx context.Context, actor Actor, orderID, idemKey, p
 	if kind == KindDeposit {
 		if err := s.orders.MarkDepositPending(ctx, orderID); err != nil {
 			return nil, err
+		}
+	}
+
+	// A synchronous PSP (and the dev stub) settles the collection immediately;
+	// asynchronous ones return "pending" and settle later via the webhook.
+	if res.Status == pspStatusSucceeded {
+		if _, err := s.settleRef(ctx, res.PSPRef, pspStatusSucceeded); err != nil {
+			return nil, err
+		}
+		if settled, err := s.repo.GetByPSPRef(ctx, res.PSPRef); err == nil {
+			payment = settled
 		}
 	}
 	return payment, nil
@@ -212,20 +227,26 @@ func (s *Service) HandleWebhook(ctx context.Context, signature string, body []by
 	if event.PSPRef == "" {
 		return "ignored", nil
 	}
+	return s.settleRef(ctx, event.PSPRef, event.Status)
+}
 
+// settleRef applies a terminal settlement to the payment with the given PSP
+// reference. It is the shared core of webhook reconciliation and of synchronous
+// (inline) settlement, and is idempotent via a per-reference reservation.
+func (s *Service) settleRef(ctx context.Context, pspRef, status string) (string, error) {
 	// Reserve the reference; a duplicate delivery short-circuits here.
-	if err := s.idem.Save(ctx, webhookScope, event.PSPRef, "1"); err != nil {
+	if err := s.idem.Save(ctx, webhookScope, pspRef, "1"); err != nil {
 		if errors.Is(err, pkg.ErrIdempotencyConflict) {
 			return "duplicate", nil
 		}
 		return "", err
 	}
 	release := func(e error) (string, error) {
-		_ = s.idem.Delete(ctx, webhookScope, event.PSPRef)
+		_ = s.idem.Delete(ctx, webhookScope, pspRef)
 		return "", e
 	}
 
-	payment, err := s.repo.GetByPSPRef(ctx, event.PSPRef)
+	payment, err := s.repo.GetByPSPRef(ctx, pspRef)
 	if errors.Is(err, pkg.ErrNotFound) {
 		return "ignored", nil // unknown reference; keep it reserved
 	}
@@ -235,7 +256,7 @@ func (s *Service) HandleWebhook(ctx context.Context, signature string, body []by
 	if payment.Status == StatusSucceeded {
 		return "already_processed", nil
 	}
-	if event.Status != "succeeded" {
+	if status != "succeeded" {
 		if err := s.repo.UpdateStatus(ctx, payment.ID, StatusFailed); err != nil {
 			return release(err)
 		}

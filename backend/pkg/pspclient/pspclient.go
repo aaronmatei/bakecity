@@ -82,11 +82,13 @@ type PSPClient interface {
 	VerifyWebhook(ctx context.Context, signature string, body []byte) (*WebhookEvent, error)
 }
 
-// StubClient is a development PSPClient. It simulates an asynchronous PSP:
-// collections return a pending reference (settlement arrives later via a
-// webhook), while split/refund/payout resolve synchronously. It performs NO
-// real signature verification — VerifyWebhook simply parses a JSON body — and
-// must never be used in production.
+// StubClient is a development PSPClient. Collections settle synchronously
+// (Status "succeeded") — i.e. it pretends the customer instantly approved the
+// STK push — so the deposit/balance flow completes without a real webhook.
+// (A real M-Pesa STK push is asynchronous; return "pending" there and let the
+// settlement webhook drive the state.) split/refund/payout also resolve
+// synchronously. It performs NO real signature verification — VerifyWebhook
+// simply parses a JSON body — and must never be used in production.
 type StubClient struct{}
 
 // NewStubClient returns a StubClient.
@@ -95,11 +97,11 @@ func NewStubClient() *StubClient { return &StubClient{} }
 var _ PSPClient = (*StubClient)(nil)
 
 func (s *StubClient) Collect(_ context.Context, req CollectRequest) (*CollectResult, error) {
-	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "pending"}, nil
+	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "succeeded"}, nil
 }
 
 func (s *StubClient) CollectBalance(_ context.Context, req CollectRequest) (*CollectResult, error) {
-	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "pending"}, nil
+	return &CollectResult{PSPRef: "stk_" + pkg.GenerateID(), Status: "succeeded"}, nil
 }
 
 func (s *StubClient) Split(_ context.Context, req SplitRequest) (*OperationResult, error) {

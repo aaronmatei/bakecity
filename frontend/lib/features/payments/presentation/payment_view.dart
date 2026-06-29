@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/helpers/formatters.dart';
 import '../../../core/helpers/validators.dart';
+import '../../../services/payment_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/primary_button.dart';
@@ -53,12 +54,17 @@ class _PaymentViewState extends ConsumerState<PaymentView> {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(next.errorMessage!)));
       } else if (next.result != null && previous?.result != next.result) {
+        final settled = next.result!.status == PaymentInitStatus.sent;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('STK push sent. Check your phone to approve.'),
+          SnackBar(
+            content: Text(
+              settled
+                  ? 'Payment received — your order is updated.'
+                  : 'STK push sent. Check your phone to approve.',
+            ),
           ),
         );
-        // The order advances (e.g. to DEPOSIT_PENDING); refresh to reflect it.
+        // The order advances (deposit paid / completed); refresh to reflect it.
         ref.invalidate(orderDetailProvider(widget.orderId));
       }
     });
