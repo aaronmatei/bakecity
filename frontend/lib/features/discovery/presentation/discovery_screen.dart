@@ -5,15 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../core/theme/app_tokens.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/network_photo.dart';
+import '../../../widgets/press_scale.dart';
+import '../../../widgets/rating_pill.dart';
 import '../../bakers/domain/baker_profile.dart';
 import '../../products/application/products_controller.dart';
 import '../application/discovery_controller.dart';
 
-/// Search + map of nearby bakers.
+/// Discover nearby bakers: search, filters, a map and a results list.
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
 
@@ -23,6 +27,7 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   final Completer<GoogleMapController> _mapController = Completer();
+  final _searchController = TextEditingController();
   bool _hasLocation = false;
 
   @override
@@ -31,9 +36,12 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     _initLocation();
   }
 
-  /// Resolves the user's location, makes the search distance-aware, and recentres
-  /// the map. Silently no-ops when location is unavailable (map stays on the
-  /// default centre).
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _initLocation() async {
     final location = await ref.read(userLocationProvider.future);
     if (location == null || !mounted) return;
@@ -76,6 +84,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = context.cs;
     final bakers = ref.watch(nearbyBakersProvider);
     final filter = ref.watch(discoveryFilterProvider);
     final markers = bakers.maybeWhen(
@@ -84,29 +93,50 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover bakers')),
+      appBar: AppBar(title: const Text('Discover')),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: SearchBar(
-              hintText: 'Search bakers or bakes',
-              leading: const Icon(Icons.search),
-              onSubmitted: (value) {
-                ref.read(discoveryFilterProvider.notifier).state =
-                    filter.copyWith(query: value);
-              },
+            padding: const EdgeInsets.fromLTRB(
+                Insets.screenH, Insets.sm, Insets.screenH, Insets.md),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search_rounded,
+                      color: cs.onSurfaceVariant, size: 22),
+                  const SizedBox(width: Insets.md),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: 'Search bakers or bakes',
+                      ),
+                      onSubmitted: (value) =>
+                          ref.read(discoveryFilterProvider.notifier).state =
+                              filter.copyWith(query: value),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const _DiscoveryFilterBar(),
-          const SizedBox(height: 8),
+          const SizedBox(height: Insets.md),
           Container(
             height: 180,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
+            margin: const EdgeInsets.symmetric(horizontal: Insets.screenH),
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-            ),
+            decoration: const BoxDecoration(borderRadius: Radii.cardBorder),
             child: GoogleMap(
               initialCameraPosition: const CameraPosition(
                 target: kDefaultMapCenter,
@@ -123,7 +153,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               },
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: Insets.md),
           Expanded(
             child: bakers.when(
               loading: () => const LoadingIndicator(label: 'Finding bakers…'),
@@ -135,33 +165,19 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 if (list.isEmpty) {
                   return const EmptyState(
                     icon: Icons.storefront_outlined,
-                    message: 'No bakers found nearby. Try widening your search.',
+                    title: 'No bakers nearby',
+                    message: 'Try widening your distance or clearing filters.',
                   );
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(Insets.screenH),
                   itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final baker = list[i];
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.cake_outlined),
-                        ),
-                        title: Text(baker.businessName),
-                        subtitle: Text(
-                          '${baker.rating.toStringAsFixed(1)} ★ '
-                          '(${baker.reviewCount})'
-                          '${baker.distanceKm != null ? ' • ${baker.distanceKm!.toStringAsFixed(1)} km' : ''}',
-                        ),
-                        trailing: baker.isVerified
-                            ? const Icon(Icons.verified, size: 18)
-                            : null,
-                        onTap: () => _openStorefront(baker.id),
-                      ),
-                    );
-                  },
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: Insets.md),
+                  itemBuilder: (context, i) => _BakerListCard(
+                    baker: list[i],
+                    onTap: () => _openStorefront(list[i].id),
+                  ),
                 );
               },
             ),
@@ -172,15 +188,90 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   }
 }
 
-/// Horizontal filter row: distance, rating, price popups + category chips, all
-/// wired to the active [discoveryFilterProvider].
+/// A full-width baker row card for the results list.
+class _BakerListCard extends StatelessWidget {
+  const _BakerListCard({required this.baker, required this.onTap});
+  final BakerProfile baker;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    return PressScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(Insets.sm),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: Radii.cardBorder,
+          boxShadow: context.bake.cardShadow,
+        ),
+        child: Row(
+          children: [
+            NetworkPhoto(
+              url: baker.coverImageUrl,
+              width: 76,
+              height: 76,
+              radius: Radii.chip,
+              fallbackIcon: Icons.storefront_outlined,
+            ),
+            const SizedBox(width: Insets.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          baker.businessName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.tt.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      if (baker.isVerified) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.verified, size: 16, color: cs.primary),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: Insets.sm),
+                  Row(
+                    children: [
+                      RatingPill(
+                          rating: baker.rating,
+                          reviewCount: baker.reviewCount),
+                      if (baker.distanceKm != null) ...[
+                        const SizedBox(width: Insets.sm),
+                        Icon(Icons.place_outlined,
+                            size: 14, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 2),
+                        Text('${baker.distanceKm!.toStringAsFixed(1)} km',
+                            style: context.tt.bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant)),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Horizontal filter row: distance, rating, price popups + category chips.
 class _DiscoveryFilterBar extends ConsumerWidget {
   const _DiscoveryFilterBar();
 
   static const List<double?> _radii = [null, 2, 5, 10, 20, 50];
   static const List<double?> _ratings = [null, 3, 4, 4.5];
 
-  // (label, minPrice, maxPrice) brackets in KES.
   static const List<(String, double?, double?)> _priceBrackets = [
     ('Any price', null, null),
     ('Under 2k', null, 2000.0),
@@ -212,10 +303,10 @@ class _DiscoveryFilterBar extends ConsumerWidget {
     final notifier = ref.read(discoveryFilterProvider.notifier);
 
     return SizedBox(
-      height: 44,
+      height: 40,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: Insets.screenH),
         children: [
           PopupMenuButton<double?>(
             initialValue: filter.radiusKm,
@@ -225,12 +316,14 @@ class _DiscoveryFilterBar extends ConsumerWidget {
               for (final r in _radii)
                 PopupMenuItem(value: r, child: Text(_radiusLabel(r))),
             ],
-            child: _FilterChipButton(
+            child: _FilterPill(
               icon: Icons.place_outlined,
               label: _radiusLabel(filter.radiusKm),
+              active: filter.radiusKm != null,
+              caret: true,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: Insets.sm),
           PopupMenuButton<double?>(
             initialValue: filter.minRating,
             onSelected: (value) => notifier.state =
@@ -239,12 +332,14 @@ class _DiscoveryFilterBar extends ConsumerWidget {
               for (final r in _ratings)
                 PopupMenuItem(value: r, child: Text(_ratingLabel(r))),
             ],
-            child: _FilterChipButton(
+            child: _FilterPill(
               icon: Icons.star_outline,
               label: _ratingLabel(filter.minRating),
+              active: filter.minRating != null,
+              caret: true,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: Insets.sm),
           PopupMenuButton<(String, double?, double?)>(
             onSelected: (bracket) {
               final (_, lo, hi) = bracket;
@@ -259,27 +354,31 @@ class _DiscoveryFilterBar extends ConsumerWidget {
               for (final bracket in _priceBrackets)
                 PopupMenuItem(value: bracket, child: Text(bracket.$1)),
             ],
-            child: _FilterChipButton(
+            child: _FilterPill(
               icon: Icons.sell_outlined,
               label: _priceLabel(filter.minPrice, filter.maxPrice),
+              active: filter.minPrice != null || filter.maxPrice != null,
+              caret: true,
             ),
           ),
-          const SizedBox(width: 8),
-          _CategoryChip(
+          const SizedBox(width: Insets.sm),
+          _FilterPill(
             label: 'All',
-            selected: filter.categorySlug == null,
-            onSelected: () => notifier.state = filter.copyWith(clearCategory: true),
+            active: filter.categorySlug == null,
+            onTap: () => notifier.state = filter.copyWith(clearCategory: true),
           ),
           ...categories.maybeWhen(
             data: (cats) => [
               for (final cat in cats)
-                if (cat.slug != null)
-                  _CategoryChip(
+                if (cat.slug != null) ...[
+                  const SizedBox(width: Insets.sm),
+                  _FilterPill(
                     label: cat.name,
-                    selected: filter.categorySlug == cat.slug,
-                    onSelected: () => notifier.state =
+                    active: filter.categorySlug == cat.slug,
+                    onTap: () => notifier.state =
                         filter.copyWith(categorySlug: cat.slug),
                   ),
+                ],
             ],
             orElse: () => const [],
           ),
@@ -289,48 +388,47 @@ class _DiscoveryFilterBar extends ConsumerWidget {
   }
 }
 
-/// A chip styled as a dropdown trigger (icon + label + caret).
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label),
-          const Icon(Icons.arrow_drop_down, size: 18),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
+/// A token-styled filter pill: dropdown trigger or toggle.
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
     required this.label,
-    required this.selected,
-    required this.onSelected,
+    this.icon,
+    this.active = false,
+    this.caret = false,
+    this.onTap,
   });
 
   final String label;
-  final bool selected;
-  final VoidCallback onSelected;
+  final IconData? icon;
+  final bool active;
+  final bool caret;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onSelected(),
+    final cs = context.cs;
+    final fg = active ? cs.onPrimary : cs.onSurface;
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 8),
+      decoration: BoxDecoration(
+        color: active ? cs.primary : cs.surface,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: active ? cs.primary : cs.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: fg),
+            const SizedBox(width: 5),
+          ],
+          Text(label,
+              style: context.tt.labelLarge
+                  ?.copyWith(color: fg, fontWeight: FontWeight.w600)),
+          if (caret) Icon(Icons.arrow_drop_down, size: 18, color: fg),
+        ],
       ),
     );
+    return onTap != null ? PressScale(onTap: onTap, child: pill) : pill;
   }
 }

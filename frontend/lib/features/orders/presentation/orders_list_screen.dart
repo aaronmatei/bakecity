@@ -4,12 +4,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/helpers/formatters.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
+import '../../../widgets/network_photo.dart';
+import '../../../widgets/press_scale.dart';
+import '../domain/order.dart';
+import '../domain/order_status_ui.dart';
 import '../application/orders_controller.dart';
 
+/// The customer's orders, as premium cards with a live status chip and a
+/// lifecycle progress bar.
 class OrdersListScreen extends ConsumerWidget {
   const OrdersListScreen({super.key});
 
@@ -18,8 +25,9 @@ class OrdersListScreen extends ConsumerWidget {
     final orders = ref.watch(ordersControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Orders')),
+      appBar: AppBar(title: const Text('Your orders')),
       body: RefreshIndicator(
+        color: context.cs.primary,
         onRefresh: () => ref.read(ordersControllerProvider.notifier).refresh(),
         child: orders.when(
           loading: () => const LoadingIndicator(),
@@ -35,57 +43,155 @@ class OrdersListScreen extends ConsumerWidget {
                   SizedBox(height: 120),
                   EmptyState(
                     icon: Icons.receipt_long_outlined,
-                    message: 'You have no orders yet.',
+                    title: 'No orders yet',
+                    message: 'When you order a custom bake, you can track it here.',
                   ),
                 ],
               );
             }
             return ListView.separated(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(Insets.screenH),
               itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final order = list[i];
-                return Card(
-                  child: ListTile(
-                    title: Text(order.title ??
-                        'Order #${order.number ?? order.id}'),
-                    subtitle: Text(
-                      '${_statusLabel(order.status)} • '
-                      '${Formatters.shortDate(order.createdAt)}',
-                    ),
-                    trailing: order.status == OrderStatus.completed
-                        ? TextButton(
-                            onPressed: () => context.pushNamed(
-                              AppRoutes.orderReviewName,
-                              pathParameters: {'orderId': order.id},
-                            ),
-                            child: const Text('Review'),
-                          )
-                        : (order.totalCents != null
-                            ? Text(
-                                Formatters.currencyFromCents(order.totalCents!))
-                            : null),
-                    onTap: () => context.pushNamed(
-                      AppRoutes.orderDetailName,
-                      pathParameters: {'orderId': order.id},
-                    ),
-                  ),
-                );
-              },
+              separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
+              itemBuilder: (context, i) => _OrderCard(order: list[i]),
             );
           },
         ),
       ),
     );
   }
+}
 
-  String _statusLabel(OrderStatus status) {
-    return status.name
-        .replaceAllMapped(
-          RegExp('[A-Z]'),
-          (m) => ' ${m.group(0)}',
-        )
-        .trim();
+class _OrderCard extends StatelessWidget {
+  const _OrderCard({required this.order});
+  final Order order;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final image = order.referenceImageUrls.isNotEmpty
+        ? order.referenceImageUrls.first
+        : null;
+    final completed = order.status == OrderStatus.completed;
+    final cancelled = order.status == OrderStatus.cancelled;
+
+    return PressScale(
+      onTap: () => context.pushNamed(
+        AppRoutes.orderDetailName,
+        pathParameters: {'orderId': order.id},
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(Insets.md),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: Radii.cardBorder,
+          boxShadow: context.bake.cardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                NetworkPhoto(
+                  url: image,
+                  width: 60,
+                  height: 60,
+                  radius: Radii.chip,
+                  fallbackIcon: Icons.cake_outlined,
+                ),
+                const SizedBox(width: Insets.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.title ?? 'Order #${order.number ?? order.id}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.tt.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        Formatters.shortDate(order.createdAt),
+                        style: context.tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: Insets.sm),
+                      OrderStatusChip(status: order.status),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: Insets.sm),
+                if (completed)
+                  TextButton(
+                    onPressed: () => context.pushNamed(
+                      AppRoutes.orderReviewName,
+                      pathParameters: {'orderId': order.id},
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: cs.primary,
+                    ),
+                    child: const Text('Review'),
+                  )
+                else if (order.totalCents != null && order.totalCents! > 0)
+                  Text(
+                    Formatters.currencyFromCents(order.totalCents!),
+                    style: context.tt.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+              ],
+            ),
+            if (!cancelled) ...[
+              const SizedBox(height: Insets.md),
+              _LifecycleBar(status: order.status),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A thin progress bar showing how far the order is through its lifecycle,
+/// tinted with the status colour.
+class _LifecycleBar extends StatelessWidget {
+  const _LifecycleBar({required this.status});
+  final OrderStatus status;
+
+  double get _fraction => switch (status) {
+        OrderStatus.draft ||
+        OrderStatus.pendingQuote ||
+        OrderStatus.quoted =>
+          0.1,
+        OrderStatus.accepted => 0.22,
+        OrderStatus.depositPaid => 0.38,
+        OrderStatus.inProduction => 0.58,
+        OrderStatus.ready => 0.72,
+        OrderStatus.dispatched => 0.86,
+        OrderStatus.delivered => 0.95,
+        OrderStatus.completed => 1.0,
+        OrderStatus.cancelled || OrderStatus.disputed => 0.0,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = status.color;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: _fraction),
+        duration: context.reduceMotion ? Duration.zero : Motion.slow,
+        curve: Motion.curve,
+        builder: (context, t, _) => LinearProgressIndicator(
+          value: t,
+          minHeight: 6,
+          backgroundColor: context.cs.outlineVariant,
+          valueColor: AlwaysStoppedAnimation(color),
+        ),
+      ),
+    );
   }
 }
