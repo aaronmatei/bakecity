@@ -5,6 +5,7 @@ import "time"
 // Order maps to the orders table.
 type Order struct {
 	ID               string      `json:"id"`
+	OrderNumber      int64       `json:"order_number"`
 	CustomerID       string      `json:"customer_id"`
 	BakerID          string      `json:"baker_id"`
 	ProductID        string      `json:"product_id,omitempty"`

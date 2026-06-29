@@ -8,6 +8,7 @@ class Order {
     required this.bakerId,
     required this.status,
     required this.createdAt,
+    this.number,
     this.productId,
     this.title,
     this.description,
@@ -20,6 +21,10 @@ class Order {
   });
 
   final String id;
+
+  /// Human-friendly sequential order number for display (e.g. 1042). The [id]
+  /// remains the internal identifier used for all API calls.
+  final int? number;
   final String customerId;
   final String bakerId;
   final String? productId;
@@ -37,6 +42,7 @@ class Order {
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
       id: json['id'].toString(),
+      number: (json['order_number'] as num?)?.toInt(),
       customerId: json['customer_id'].toString(),
       bakerId: json['baker_id'].toString(),
       productId: json['product_id']?.toString(),
@@ -63,6 +69,7 @@ class Order {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'order_number': number,
         'customer_id': customerId,
         'baker_id': bakerId,
         'product_id': productId,

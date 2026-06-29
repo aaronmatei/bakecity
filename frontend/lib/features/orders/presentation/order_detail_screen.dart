@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/orders_controller.dart';
 import '../../delivery/presentation/delivery_view.dart';
 import '../../disputes/presentation/dispute_view.dart';
 import '../../messaging/presentation/messaging_view.dart';
@@ -21,7 +22,10 @@ class OrderDetailScreen extends ConsumerWidget {
       length: 6,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Order #$orderId'),
+          title: ref.watch(orderDetailProvider(orderId)).maybeWhen(
+                data: (o) => Text('Order #${o.number ?? orderId}'),
+                orElse: () => const Text('Order'),
+              ),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [

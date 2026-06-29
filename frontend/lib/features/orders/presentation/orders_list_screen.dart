@@ -48,7 +48,8 @@ class OrdersListScreen extends ConsumerWidget {
                 final order = list[i];
                 return Card(
                   child: ListTile(
-                    title: Text(order.title ?? 'Order #${order.id}'),
+                    title: Text(order.title ??
+                        'Order #${order.number ?? order.id}'),
                     subtitle: Text(
                       '${_statusLabel(order.status)} • '
                       '${Formatters.shortDate(order.createdAt)}',

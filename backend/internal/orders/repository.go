@@ -22,13 +22,13 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const orderColumns = `id, customer_id, baker_id, COALESCE(product_id::text, ''), status,
+const orderColumns = `id, order_number, customer_id, baker_id, COALESCE(product_id::text, ''), status,
 	event_date, COALESCE(delivery_address, ''),
 	total_amount, deposit_amount, balance_amount, commission_amount, created_at`
 
 func scanOrder(row pgx.Row) (*Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
+	err := row.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 		&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
 		&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -154,7 +154,7 @@ func (r *Repository) List(ctx context.Context, userID, bakerID string, f ListFil
 	out := make([]Order, 0)
 	for rows.Next() {
 		var o Order
-		if err := rows.Scan(&o.ID, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
+		if err := rows.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
 			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt); err != nil {
 			return nil, err
