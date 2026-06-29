@@ -111,6 +111,7 @@ class PaymentService {
     return _initiate(
       ApiEndpoints.orderPaymentDeposit(orderId),
       phone: phone,
+      idempotencyKey: 'deposit:$orderId',
     );
   }
 
@@ -122,6 +123,7 @@ class PaymentService {
     return _initiate(
       ApiEndpoints.orderPaymentBalance(orderId),
       phone: phone,
+      idempotencyKey: 'balance:$orderId',
     );
   }
 
@@ -142,11 +144,15 @@ class PaymentService {
   Future<PaymentInitResult> _initiate(
     String path, {
     required String phone,
+    required String idempotencyKey,
   }) async {
-    // TODO: Surface provider-specific reference/amount once finalised.
+    // The backend dedupes repeat calls carrying the same Idempotency-Key, so a
+    // double-tap (or a retried request) won't fire a second STK push while one
+    // is already pending for this order.
     final response = await _api.post<Map<String, dynamic>>(
       path,
       data: {'phone': phone},
+      headers: {'Idempotency-Key': idempotencyKey},
     );
     final data = response.data;
     if (data == null) {

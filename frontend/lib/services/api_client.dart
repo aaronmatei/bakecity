@@ -101,9 +101,15 @@ class ApiClient {
     String path, {
     Object? data,
     Map<String, dynamic>? queryParameters,
+    Map<String, dynamic>? headers,
   }) {
     return _guard(
-      () => _dio.post<T>(path, data: data, queryParameters: queryParameters),
+      () => _dio.post<T>(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: headers == null ? null : Options(headers: headers),
+      ),
     );
   }
 
