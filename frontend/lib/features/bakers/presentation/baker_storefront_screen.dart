@@ -9,10 +9,19 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/press_scale.dart';
+import '../../home/widgets/category_chip.dart';
 import '../../home/widgets/product_card.dart';
 import '../../products/application/products_controller.dart';
+import '../../products/domain/product.dart';
 import '../application/baker_storefront_controller.dart';
 import '../domain/my_baker_profile.dart';
+
+const _storefrontSorts = [
+  ('top_rated', 'Top rated'),
+  ('price_asc', 'Price: low to high'),
+  ('price_desc', 'Price: high to low'),
+  ('newest', 'Newest'),
+];
 
 /// A baker's public storefront: a cover header with key stats, then their
 /// catalog as a premium grid leading into the custom-order flow.
@@ -39,7 +48,7 @@ class BakerStorefrontScreen extends ConsumerWidget {
           color: context.cs.primary,
           onRefresh: () async {
             ref.invalidate(bakerProfileProvider(bakerId));
-            ref.invalidate(productsProvider(bakerId));
+            ref.invalidate(productSearchProvider);
           },
           child: CustomScrollView(
             slivers: [
@@ -193,13 +202,25 @@ class _StoreInfo extends StatelessWidget {
   }
 }
 
-class _Menu extends ConsumerWidget {
+class _Menu extends ConsumerStatefulWidget {
   const _Menu({required this.bakerId});
   final String bakerId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final products = ref.watch(productsProvider(bakerId));
+  ConsumerState<_Menu> createState() => _MenuState();
+}
+
+class _MenuState extends ConsumerState<_Menu> {
+  String? _categoryId; // null = all
+  String _sort = 'top_rated';
+
+  @override
+  Widget build(BuildContext context) {
+    final filter =
+        ProductFilter(bakerId: widget.bakerId, sort: _sort, limit: 100);
+    final products = ref.watch(productSearchProvider(filter));
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+
     return products.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
@@ -209,11 +230,11 @@ class _Menu extends ConsumerWidget {
         padding: const EdgeInsets.all(Insets.screenH),
         child: AppErrorView(
           message: e is AppException ? e.message : e.toString(),
-          onRetry: () => ref.invalidate(productsProvider(bakerId)),
+          onRetry: () => ref.invalidate(productSearchProvider(filter)),
         ),
       ),
-      data: (items) {
-        if (items.isEmpty) {
+      data: (all) {
+        if (all.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: EmptyState(
@@ -222,25 +243,119 @@ class _Menu extends ConsumerWidget {
             ),
           );
         }
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final itemWidth =
-                (constraints.maxWidth - Insets.screenH * 2 - Insets.lg) / 2;
-            return Padding(
+        // Only the categories this baker actually stocks.
+        final present = all
+            .map((p) => p.categoryId)
+            .whereType<String>()
+            .where((s) => s.isNotEmpty)
+            .toSet();
+        final cats =
+            categories.where((c) => present.contains(c.id)).toList();
+        final shown = _categoryId == null
+            ? all
+            : all.where((p) => p.categoryId == _categoryId).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (cats.length > 1)
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: Insets.screenH),
+                  itemCount: cats.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(width: Insets.sm),
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return CategoryChip(
+                        category: const Category(id: '_all', name: 'All'),
+                        selected: _categoryId == null,
+                        onTap: () => setState(() => _categoryId = null),
+                      );
+                    }
+                    final c = cats[i - 1];
+                    return CategoryChip(
+                      category: c,
+                      selected: _categoryId == c.id,
+                      onTap: () => setState(() =>
+                          _categoryId = _categoryId == c.id ? null : c.id),
+                    );
+                  },
+                ),
+              ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(
-                  Insets.screenH, 0, Insets.screenH, Insets.xxl),
-              child: Wrap(
-                spacing: Insets.lg,
-                runSpacing: Insets.xl,
+                  Insets.screenH, Insets.sm, Insets.screenH, Insets.sm),
+              child: Row(
                 children: [
-                  for (final p in items)
-                    ProductCard(product: p, width: itemWidth),
+                  Text('${shown.length} treats',
+                      style: context.tt.bodySmall
+                          ?.copyWith(color: context.cs.onSurfaceVariant)),
+                  const Spacer(),
+                  _SortMenu(
+                    sort: _sort,
+                    onChanged: (v) => setState(() => _sort = v),
+                  ),
                 ],
               ),
-            );
-          },
+            ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final w =
+                    (constraints.maxWidth - Insets.screenH * 2 - Insets.lg) / 2;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      Insets.screenH, 0, Insets.screenH, Insets.xxl),
+                  child: Wrap(
+                    spacing: Insets.lg,
+                    runSpacing: Insets.xl,
+                    children: [
+                      for (final p in shown)
+                        ProductCard(
+                          product: p,
+                          width: w,
+                          discountPct: p.isOnOffer ? p.discountPct : null,
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         );
       },
+    );
+  }
+}
+
+class _SortMenu extends StatelessWidget {
+  const _SortMenu({required this.sort, required this.onChanged});
+  final String sort;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final label = _storefrontSorts
+        .firstWhere((s) => s.$1 == sort, orElse: () => _storefrontSorts.first)
+        .$2;
+    return PopupMenuButton<String>(
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final s in _storefrontSorts)
+          PopupMenuItem(value: s.$1, child: Text(s.$2)),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.swap_vert, size: 16, color: cs.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(label, style: context.tt.labelLarge),
+          Icon(Icons.arrow_drop_down, size: 18, color: cs.onSurfaceVariant),
+        ],
+      ),
     );
   }
 }
