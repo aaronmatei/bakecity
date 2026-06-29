@@ -45,6 +45,15 @@ docker-build:
 docker-run:
 	docker run -p 8080:8080 --env-file backend/.env bakecity:latest
 
+# Seed a rich, idempotent product catalog across the existing approved bakers.
+# Runs the Go seeder on the compose network so it reaches the postgres service.
+.PHONY: seed
+seed:
+	docker run --rm --network bakecity_default \
+		-v "$(CURDIR)/backend":/app -w /app \
+		-e DATABASE_URL=postgres://bakecity:bakecity_dev@postgres:5432/bakecity?sslmode=disable \
+		golang:1.25 go run ./scripts/seed_catalog.go
+
 .PHONY: migrate-up
 migrate-up:
 	migrate -path backend/migrations -database "$$DATABASE_URL" up
