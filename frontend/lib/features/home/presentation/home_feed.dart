@@ -40,6 +40,7 @@ class HomeFeed extends ConsumerWidget {
       const _BakersRail(),
       const _ProductRail(title: 'Top rated', variant: _RailVariant.plain),
       const _ProductRail(title: 'Best sellers', variant: _RailVariant.ranked),
+      const _ProductRail(title: 'On offer this week', variant: _RailVariant.offers),
       const _ProductRail(title: 'New on BakeCity', variant: _RailVariant.fresh),
       const SizedBox(height: Insets.xxl),
     ];
@@ -48,7 +49,8 @@ class HomeFeed extends ConsumerWidget {
       color: context.cs.primary,
       onRefresh: () async {
         ref.invalidate(nearbyBakersProvider);
-        ref.invalidate(productsProvider(null));
+        ref.invalidate(productSearchProvider);
+        ref.invalidate(categoriesProvider);
       },
       child: CustomScrollView(
         slivers: [
@@ -321,10 +323,10 @@ class _CategoriesRail extends ConsumerWidget {
               final c = items[i - 1];
               return CategoryChip(
                 category: c,
-                selected: selected == c.id,
+                selected: selected == c.slug,
                 onTap: () => ref
                     .read(_selectedCategoryProvider.notifier)
-                    .state = (selected == c.id ? null : c.id),
+                    .state = (selected == c.slug ? null : c.slug),
               );
             },
           ),
@@ -380,7 +382,7 @@ class _BakersRail extends ConsumerWidget {
 // Product rails
 // ---------------------------------------------------------------------------
 
-enum _RailVariant { plain, ranked, fresh }
+enum _RailVariant { plain, ranked, fresh, offers }
 
 class _ProductRail extends ConsumerWidget {
   const _ProductRail({required this.title, required this.variant});
@@ -388,25 +390,33 @@ class _ProductRail extends ConsumerWidget {
   final String title;
   final _RailVariant variant;
 
+  String get _sort => switch (variant) {
+        _RailVariant.plain => 'top_rated',
+        _RailVariant.ranked => 'best_selling',
+        _RailVariant.fresh => 'newest',
+        _RailVariant.offers => 'top_rated',
+      };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final products = ref.watch(productsProvider(null));
-    final categoryId = ref.watch(_selectedCategoryProvider);
+    final categorySlug = ref.watch(_selectedCategoryProvider);
+    // Each rail is a real backend sort over the catalog, honouring the selected
+    // category chip; the offers rail also filters to on-offer products.
+    final filter = ProductFilter(
+      category: categorySlug,
+      sort: _sort,
+      onOffer: variant == _RailVariant.offers ? true : null,
+      limit: 12,
+    );
+    final products = ref.watch(productSearchProvider(filter));
 
     return products.when(
       loading: () => _RailLoading(title: title, height: 230),
       error: (e, _) => _RailError(
         title: title,
-        onRetry: () => ref.invalidate(productsProvider(null)),
+        onRetry: () => ref.invalidate(productSearchProvider(filter)),
       ),
-      data: (all) {
-        var list = categoryId == null
-            ? all
-            : all.where((p) => p.categoryId == categoryId).toList();
-        // Derive each rail from the catalog (no dedicated endpoints yet):
-        // "new" reverses to surface the most recently added.
-        if (variant == _RailVariant.fresh) list = list.reversed.toList();
-        list = list.take(10).toList();
+      data: (list) {
         if (list.isEmpty) return const SizedBox.shrink();
         return RailSection(
           title: title,
@@ -417,6 +427,7 @@ class _ProductRail extends ConsumerWidget {
             product: list[i],
             rank: variant == _RailVariant.ranked ? i + 1 : null,
             isNew: variant == _RailVariant.fresh,
+            discountPct: list[i].isOnOffer ? list[i].discountPct : null,
           ),
         );
       },

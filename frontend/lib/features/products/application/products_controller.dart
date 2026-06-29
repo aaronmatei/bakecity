@@ -22,6 +22,118 @@ final productsProvider =
       .toList();
 });
 
+/// A composable catalog filter for GET /search/products. All set fields apply
+/// together (AND). [sort] is one of: top_rated, best_selling, nearest,
+/// price_asc, price_desc, newest.
+class ProductFilter {
+  const ProductFilter({
+    this.category,
+    this.occasion,
+    this.flavor,
+    this.format,
+    this.dietary = const [],
+    this.minPrice,
+    this.maxPrice,
+    this.minRating,
+    this.onOffer,
+    this.bakerId,
+    this.sort,
+    this.query,
+    this.limit = 20,
+  });
+
+  final String? category;
+  final String? occasion;
+  final String? flavor;
+  final String? format;
+  final List<String> dietary;
+  final double? minPrice;
+  final double? maxPrice;
+  final double? minRating;
+  final bool? onOffer;
+  final String? bakerId;
+  final String? sort;
+  final String? query;
+  final int limit;
+
+  ProductFilter copyWith({
+    String? category,
+    String? occasion,
+    String? flavor,
+    String? format,
+    List<String>? dietary,
+    double? minPrice,
+    double? maxPrice,
+    double? minRating,
+    bool? onOffer,
+    String? sort,
+    String? query,
+    bool clearCategory = false,
+    bool clearCakeAxes = false,
+    bool clearPrice = false,
+    bool clearRating = false,
+    bool clearOffer = false,
+  }) {
+    return ProductFilter(
+      category: clearCategory ? null : (category ?? this.category),
+      occasion: clearCakeAxes ? null : (occasion ?? this.occasion),
+      flavor: clearCakeAxes ? null : (flavor ?? this.flavor),
+      format: clearCakeAxes ? null : (format ?? this.format),
+      dietary: dietary ?? this.dietary,
+      minPrice: clearPrice ? null : (minPrice ?? this.minPrice),
+      maxPrice: clearPrice ? null : (maxPrice ?? this.maxPrice),
+      minRating: clearRating ? null : (minRating ?? this.minRating),
+      onOffer: clearOffer ? null : (onOffer ?? this.onOffer),
+      bakerId: bakerId,
+      sort: sort ?? this.sort,
+      query: query ?? this.query,
+      limit: limit,
+    );
+  }
+
+  Map<String, dynamic> toQueryParameters() => {
+        if (category != null) 'category': category,
+        if (occasion != null) 'occasion': occasion,
+        if (flavor != null) 'flavor': flavor,
+        if (format != null) 'format': format,
+        if (dietary.isNotEmpty) 'dietary': dietary.join(','),
+        if (minPrice != null) 'min_price': minPrice,
+        if (maxPrice != null) 'max_price': maxPrice,
+        if (minRating != null) 'min_rating': minRating,
+        if (onOffer == true) 'on_offer': true,
+        if (bakerId != null) 'baker_id': bakerId,
+        if (sort != null) 'sort': sort,
+        if (query != null && query!.isNotEmpty) 'q': query,
+        'limit': limit,
+      };
+
+  String get _key =>
+      '$category|$occasion|$flavor|$format|${dietary.join(",")}|$minPrice|'
+      '$maxPrice|$minRating|$onOffer|$bakerId|$sort|$query|$limit';
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProductFilter && other._key == _key;
+
+  @override
+  int get hashCode => _key.hashCode;
+}
+
+/// Searches the catalog with a composable [ProductFilter].
+final productSearchProvider =
+    FutureProvider.family<List<Product>, ProductFilter>((ref, filter) async {
+  final api = ref.watch(apiClientProvider);
+  final response = await api.get<Map<String, dynamic>>(
+    ApiEndpoints.searchProducts,
+    queryParameters: filter.toQueryParameters(),
+  );
+  final items =
+      (response.data?['data'] ?? response.data?['products'] ?? []) as List;
+  return items
+      .map((e) => Product.fromJson(e as Map<String, dynamic>))
+      .toList();
+});
+
 /// Loads a single product by id.
 final productDetailProvider =
     FutureProvider.family<Product, String>((ref, productId) async {

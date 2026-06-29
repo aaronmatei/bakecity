@@ -11,6 +11,14 @@ class Product {
     this.leadTimeDays = 1,
     this.isCustomizable = true,
     this.isAvailable = true,
+    this.ratingAvg = 0,
+    this.ratingCount = 0,
+    this.isOnOffer = false,
+    this.discountPct,
+    this.dietary = const [],
+    this.cakeOccasion,
+    this.cakeFlavor,
+    this.cakeFormat,
   });
 
   final String id;
@@ -25,6 +33,21 @@ class Product {
   final int leadTimeDays;
   final bool isCustomizable;
   final bool isAvailable;
+
+  // Catalog enrichment.
+  final double ratingAvg;
+  final int ratingCount;
+  final bool isOnOffer;
+  final int? discountPct;
+  final List<String> dietary;
+  final String? cakeOccasion;
+  final String? cakeFlavor;
+  final String? cakeFormat;
+
+  /// Discounted price in cents when on offer (else the base price).
+  int get effectivePriceCents => isOnOffer && discountPct != null
+      ? (basePriceCents * (100 - discountPct!) / 100).round()
+      : basePriceCents;
 
   factory Product.fromJson(Map<String, dynamic> json) {
     // Backend product: { title, base_price (KES), active }. Map to the app's
@@ -43,9 +66,21 @@ class Product {
           (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
               const [],
       leadTimeDays: (json['lead_time_days'] as num?)?.toInt() ?? 1,
-      isCustomizable: json['is_customizable'] as bool? ?? true,
+      isCustomizable: json['is_custom'] as bool? ??
+          json['is_customizable'] as bool? ??
+          true,
       isAvailable:
           json['active'] as bool? ?? json['is_available'] as bool? ?? true,
+      ratingAvg: (json['rating_avg'] as num?)?.toDouble() ?? 0,
+      ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
+      isOnOffer: json['is_on_offer'] as bool? ?? false,
+      discountPct: (json['discount_pct'] as num?)?.toInt(),
+      dietary:
+          (json['dietary'] as List?)?.map((e) => e.toString()).toList() ??
+              const [],
+      cakeOccasion: json['cake_occasion'] as String?,
+      cakeFlavor: json['cake_flavor'] as String?,
+      cakeFormat: json['cake_format'] as String?,
     );
   }
 

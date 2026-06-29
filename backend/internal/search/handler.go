@@ -2,6 +2,7 @@ package search
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -62,7 +63,7 @@ func (h *Handler) Products(c *gin.Context) {
 		Occasion:     c.Query("occasion"),
 		Flavor:       c.Query("flavor"),
 		Format:       c.Query("format"),
-		Dietary:      c.QueryArray("dietary"),
+		Dietary:      csvParam(c, "dietary"),
 		MinPrice:     floatParam(c, "min_price"),
 		MaxPrice:     floatParam(c, "max_price"),
 		MinRating:    floatParam(c, "min_rating"),
@@ -93,6 +94,20 @@ func floatParam(c *gin.Context, key string) *float64 {
 		return nil
 	}
 	return &v
+}
+
+// csvParam reads a repeatable param that may also be comma-joined
+// (dietary=a&dietary=b or dietary=a,b), returning the flattened, trimmed list.
+func csvParam(c *gin.Context, key string) []string {
+	var out []string
+	for _, raw := range c.QueryArray(key) {
+		for _, part := range strings.Split(raw, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // boolParam parses an optional boolean query parameter (true/1), nil if absent.
