@@ -58,10 +58,18 @@ func (h *Handler) Products(c *gin.Context) {
 	q := ProductSearchQuery{
 		Q:            c.Query("q"),
 		CategorySlug: c.Query("category"),
+		BakerID:      c.Query("baker_id"),
+		Occasion:     c.Query("occasion"),
+		Flavor:       c.Query("flavor"),
+		Format:       c.Query("format"),
+		Dietary:      c.QueryArray("dietary"),
 		MinPrice:     floatParam(c, "min_price"),
 		MaxPrice:     floatParam(c, "max_price"),
+		MinRating:    floatParam(c, "min_rating"),
+		OnOffer:      boolParam(c, "on_offer"),
 		Lat:          floatParam(c, "lat"),
 		Lng:          floatParam(c, "lng"),
+		Sort:         c.Query("sort"),
 		Limit:        limit,
 		Offset:       offset,
 	}
@@ -84,6 +92,16 @@ func floatParam(c *gin.Context, key string) *float64 {
 	if err != nil {
 		return nil
 	}
+	return &v
+}
+
+// boolParam parses an optional boolean query parameter (true/1), nil if absent.
+func boolParam(c *gin.Context, key string) *bool {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil
+	}
+	v := raw == "true" || raw == "1"
 	return &v
 }
 

@@ -114,20 +114,40 @@ func (r *Repository) SearchProducts(ctx context.Context, q ProductSearchQuery) (
 		distExpr = "ST_Distance(bp.location, " + pointExpr + ") / 1000"
 	}
 
+	// Image URLs: media.s3_key holds the full URL for seeded/external product
+	// images, ordered by position.
+	const imagesExpr = `COALESCE(ARRAY(
+		SELECT m.s3_key FROM product_images pim JOIN media m ON m.id = pim.media_id
+		WHERE pim.product_id = p.id ORDER BY pim.position), '{}'::text[])`
+
 	var sb strings.Builder
 	sb.WriteString(`SELECT p.id, p.baker_id, bp.business_name, COALESCE(p.category_id::text, ''),
-	    p.title, COALESCE(p.description, ''), p.base_price, p.lead_time_days, ` + distExpr + `, p.created_at
+	    p.title, COALESCE(p.description, ''), p.base_price, p.lead_time_days,
+	    p.rating_avg, p.rating_count, p.is_on_offer, p.discount_pct, p.dietary,
+	    COALESCE(p.cake_occasion,''), COALESCE(p.cake_flavor,''), COALESCE(p.cake_format,''),
+	    ` + imagesExpr + `, ` + distExpr + ` AS distance_km, p.created_at
 	  FROM products p
 	  JOIN baker_profiles bp ON bp.id = p.baker_id
 	  LEFT JOIN product_categories c ON c.id = p.category_id
 	 WHERE p.active = true AND bp.status = 'approved'`)
 
-	if geo {
-		sb.WriteString(" AND bp.location IS NOT NULL AND ST_DWithin(bp.location, " +
-			pointExpr + ", bp.delivery_radius_km * 1000)")
+	if q.BakerID != "" {
+		sb.WriteString(" AND p.baker_id = " + b.add(q.BakerID))
 	}
 	if q.CategorySlug != "" {
 		sb.WriteString(" AND c.slug = " + b.add(q.CategorySlug))
+	}
+	if q.Occasion != "" {
+		sb.WriteString(" AND p.cake_occasion = " + b.add(q.Occasion))
+	}
+	if q.Flavor != "" {
+		sb.WriteString(" AND p.cake_flavor = " + b.add(q.Flavor))
+	}
+	if q.Format != "" {
+		sb.WriteString(" AND p.cake_format = " + b.add(q.Format))
+	}
+	if len(q.Dietary) > 0 {
+		sb.WriteString(" AND p.dietary @> " + b.add(q.Dietary)) // contains all
 	}
 	if q.MinPrice != nil {
 		sb.WriteString(" AND p.base_price >= " + b.add(*q.MinPrice))
@@ -135,16 +155,18 @@ func (r *Repository) SearchProducts(ctx context.Context, q ProductSearchQuery) (
 	if q.MaxPrice != nil {
 		sb.WriteString(" AND p.base_price <= " + b.add(*q.MaxPrice))
 	}
+	if q.MinRating != nil {
+		sb.WriteString(" AND p.rating_avg >= " + b.add(*q.MinRating))
+	}
+	if q.OnOffer != nil && *q.OnOffer {
+		sb.WriteString(" AND p.is_on_offer = true")
+	}
 	if q.Q != "" {
 		w := b.add("%" + q.Q + "%")
 		sb.WriteString(" AND (p.title ILIKE " + w + " OR p.description ILIKE " + w + ")")
 	}
 
-	if geo {
-		sb.WriteString(" ORDER BY 9 ASC NULLS LAST")
-	} else {
-		sb.WriteString(" ORDER BY p.created_at DESC")
-	}
+	sb.WriteString(" ORDER BY " + productSort(q.Sort, geo))
 	sb.WriteString(" LIMIT " + b.add(q.Limit) + " OFFSET " + b.add(q.Offset))
 
 	rows, err := r.db.Query(ctx, sb.String(), b.args...)
@@ -158,12 +180,41 @@ func (r *Repository) SearchProducts(ctx context.Context, q ProductSearchQuery) (
 		var res ProductResult
 		if err := rows.Scan(&res.ID, &res.BakerID, &res.BakerName, &res.CategoryID,
 			&res.Title, &res.Description, &res.BasePrice, &res.LeadTimeDays,
-			&res.DistanceKM, &res.CreatedAt); err != nil {
+			&res.RatingAvg, &res.RatingCount, &res.IsOnOffer, &res.DiscountPct, &res.Dietary,
+			&res.CakeOccasion, &res.CakeFlavor, &res.CakeFormat,
+			&res.ImageURLs, &res.DistanceKM, &res.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, res)
 	}
 	return out, rows.Err()
+}
+
+// productSort maps a sort key to an ORDER BY clause. The distance column is the
+// second-to-last SELECT column (used for "nearest").
+func productSort(sort string, geo bool) string {
+	switch sort {
+	case "top_rated":
+		return "p.rating_avg DESC, p.rating_count DESC"
+	case "best_selling":
+		return "p.rating_count DESC, p.rating_avg DESC"
+	case "price_asc":
+		return "p.base_price ASC"
+	case "price_desc":
+		return "p.base_price DESC"
+	case "newest":
+		return "p.created_at DESC"
+	case "nearest":
+		if geo {
+			return "distance_km ASC NULLS LAST"
+		}
+		return "p.created_at DESC"
+	default:
+		if geo {
+			return "distance_km ASC NULLS LAST"
+		}
+		return "p.created_at DESC"
+	}
 }
 
 // productExists builds an EXISTS predicate matching an active product owned by
