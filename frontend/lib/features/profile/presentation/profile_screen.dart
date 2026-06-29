@@ -107,6 +107,11 @@ class ProfileScreen extends ConsumerWidget {
                 onTap: () => context.pushNamed(AppRoutes.manageProductsName),
               ),
               _SettingsTile(
+                icon: Icons.insights_outlined,
+                label: 'Insights',
+                onTap: () => context.pushNamed(AppRoutes.insightsName),
+              ),
+              _SettingsTile(
                 icon: Icons.account_balance_wallet_outlined,
                 label: 'Earnings & payouts',
                 onTap: () => context.pushNamed(AppRoutes.payoutsName),

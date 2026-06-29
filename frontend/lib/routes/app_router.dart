@@ -15,6 +15,7 @@ import '../features/catalog/presentation/catalog_screen.dart';
 import '../features/catalog/presentation/manage_products_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/favorites/presentation/favorites_screen.dart';
+import '../features/insights/presentation/insights_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
@@ -132,6 +133,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.manageProducts,
         name: AppRoutes.manageProductsName,
         builder: (context, state) => const ManageProductsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.insights,
+        name: AppRoutes.insightsName,
+        builder: (context, state) => const InsightsScreen(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

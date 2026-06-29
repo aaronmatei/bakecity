@@ -15,6 +15,7 @@ class AppRoutes {
   static const String search = '/search';
   static const String catalog = '/catalog';
   static const String manageProducts = '/me/products';
+  static const String insights = '/me/insights';
   static const String favorites = '/favorites';
   static const String notifications = '/notifications';
   static const String payouts = '/payouts';
@@ -41,6 +42,7 @@ class AppRoutes {
   static const String searchName = 'search';
   static const String catalogName = 'catalog';
   static const String manageProductsName = 'manageProducts';
+  static const String insightsName = 'insights';
   static const String favoritesName = 'favorites';
   static const String notificationsName = 'notifications';
   static const String payoutsName = 'payouts';
