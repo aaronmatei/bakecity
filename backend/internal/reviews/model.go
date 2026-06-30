@@ -6,13 +6,14 @@ import (
 
 // Review maps to the reviews table.
 type Review struct {
-	ID         string    `json:"id"`
-	OrderID    string    `json:"order_id"`
-	CustomerID string    `json:"customer_id"`
-	BakerID    string    `json:"baker_id"`
-	Rating     int       `json:"rating"`
-	Body       string    `json:"body,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID           string    `json:"id"`
+	OrderID      string    `json:"order_id"`
+	CustomerID   string    `json:"customer_id"`
+	CustomerName string    `json:"author_name,omitempty"`
+	BakerID      string    `json:"baker_id"`
+	Rating       int       `json:"rating"`
+	Body         string    `json:"body,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // BakerReviews is a baker's review list with aggregate rating.

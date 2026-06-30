@@ -24,7 +24,7 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 // CreateUser inserts a user and its credential, returning the new user id. When
 // businessName is non-empty, a baker_profiles row is created in the same
 // transaction so baker sign-up is atomic.
-func (r *Repository) CreateUser(ctx context.Context, phone, email, passwordHash string, roleMask int, businessName string) (string, error) {
+func (r *Repository) CreateUser(ctx context.Context, phone, email, passwordHash string, roleMask int, businessName, name string) (string, error) {
 	if r.db == nil {
 		return "", pkg.ErrNotImplemented
 	}
@@ -40,8 +40,8 @@ func (r *Repository) CreateUser(ctx context.Context, phone, email, passwordHash 
 		emailArg = email
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO users (role_mask, phone, email) VALUES ($1, $2, $3) RETURNING id`,
-		roleMask, phone, emailArg,
+		`INSERT INTO users (role_mask, phone, email, name) VALUES ($1, $2, $3, NULLIF($4, '')) RETURNING id`,
+		roleMask, phone, emailArg, name,
 	).Scan(&userID)
 	if err != nil {
 		return "", err

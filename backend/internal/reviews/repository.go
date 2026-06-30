@@ -100,8 +100,11 @@ func (r *Repository) ListByBaker(ctx context.Context, bakerID string, limit, off
 	}
 
 	rows, err := r.db.Query(ctx,
-		`SELECT `+reviewColumns+` FROM reviews WHERE baker_id = $1
-		  ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`,
+		`SELECT r.id, r.order_id, r.customer_id, r.baker_id, r.rating,
+		        COALESCE(r.body, ''), r.created_at, COALESCE(u.name, '')
+		   FROM reviews r LEFT JOIN users u ON u.id = r.customer_id
+		  WHERE r.baker_id = $1
+		  ORDER BY r.created_at DESC, r.id DESC LIMIT $2 OFFSET $3`,
 		bakerID, limit, offset,
 	)
 	if err != nil {
@@ -111,7 +114,7 @@ func (r *Repository) ListByBaker(ctx context.Context, bakerID string, limit, off
 	for rows.Next() {
 		var rev Review
 		if err := rows.Scan(&rev.ID, &rev.OrderID, &rev.CustomerID, &rev.BakerID,
-			&rev.Rating, &rev.Body, &rev.CreatedAt); err != nil {
+			&rev.Rating, &rev.Body, &rev.CreatedAt, &rev.CustomerName); err != nil {
 			return nil, err
 		}
 		out.Reviews = append(out.Reviews, rev)

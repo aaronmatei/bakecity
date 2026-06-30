@@ -10,6 +10,7 @@ type User struct {
 	RoleMask      int       `json:"role_mask"`
 	Phone         string    `json:"phone"`
 	Email         string    `json:"email,omitempty"`
+	Name          string    `json:"name,omitempty"`
 	PhoneVerified bool      `json:"phone_verified"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

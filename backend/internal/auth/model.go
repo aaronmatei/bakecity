@@ -11,6 +11,10 @@ type RegisterRequest struct {
 	// BusinessName is the bakery's display name. Required when Role is "baker";
 	// ignored otherwise.
 	BusinessName string `json:"business_name"`
+	// The person's name (e.g. "Jane Doe"). Accepted as display_name (the client
+	// sends this) or name; stored on the user for greetings and reviews.
+	DisplayName string `json:"display_name"`
+	Name        string `json:"name"`
 }
 
 // LoginRequest is the payload for user login.

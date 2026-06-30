@@ -21,11 +21,11 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const userColumns = `id, role_mask, phone, COALESCE(email, ''), phone_verified, created_at, updated_at`
+const userColumns = `id, role_mask, phone, COALESCE(email, ''), COALESCE(name, ''), phone_verified, created_at, updated_at`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.RoleMask, &u.Phone, &u.Email, &u.PhoneVerified, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.RoleMask, &u.Phone, &u.Email, &u.Name, &u.PhoneVerified, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}

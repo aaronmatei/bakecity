@@ -56,7 +56,11 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthRespo
 		return nil, pkg.NewAPIError(http.StatusInternalServerError, pkg.ErrCodeInternal, "could not hash password").WithErr(err)
 	}
 
-	userID, err := s.repo.CreateUser(ctx, phone, req.Email, string(hash), roleMask, businessName)
+	name := strings.TrimSpace(req.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(req.Name)
+	}
+	userID, err := s.repo.CreateUser(ctx, phone, req.Email, string(hash), roleMask, businessName, name)
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotImplemented) {
 			return nil, pkg.NewAPIError(http.StatusNotImplemented, pkg.ErrCodeNotImplemented, "auth storage not configured")
