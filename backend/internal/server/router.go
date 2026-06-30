@@ -17,6 +17,7 @@ import (
 	"github.com/corebalt/bakecity/internal/config"
 	"github.com/corebalt/bakecity/internal/delivery"
 	"github.com/corebalt/bakecity/internal/disputes"
+	"github.com/corebalt/bakecity/internal/favorites"
 	"github.com/corebalt/bakecity/internal/ledger"
 	"github.com/corebalt/bakecity/internal/media"
 	"github.com/corebalt/bakecity/internal/messaging"
@@ -122,6 +123,7 @@ func New(deps Deps) *gin.Engine {
 	ledgerRepo := ledger.NewRepository(deps.DB)
 	disputesRepo := disputes.NewRepository(deps.DB)
 	reviewsRepo := reviews.NewRepository(deps.DB)
+	favoritesRepo := favorites.NewRepository(deps.DB)
 	notificationsRepo := notifications.NewRepository(deps.DB)
 	adminRepo := admin.NewRepository(deps.DB)
 	analyticsRepo := analytics.NewRepository(deps.DB)
@@ -145,6 +147,7 @@ func New(deps Deps) *gin.Engine {
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc, notificationsSvc)
 	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc, notificationsSvc)
 	reviewsSvc := reviews.NewService(reviewsRepo, ordersSvc)
+	favoritesSvc := favorites.NewService(favoritesRepo)
 	adminSvc := admin.NewService(adminRepo, ordersSvc, ledgerSvc, disputesSvc)
 	analyticsSvc := analytics.NewService(analyticsRepo)
 
@@ -163,6 +166,7 @@ func New(deps Deps) *gin.Engine {
 	paymentsH := payments.NewHandler(paymentsSvc)
 	disputesH := disputes.NewHandler(disputesSvc)
 	reviewsH := reviews.NewHandler(reviewsSvc)
+	favoritesH := favorites.NewHandler(favoritesSvc)
 	notificationsH := notifications.NewHandler(notificationsSvc, hub, deps.Cfg.JWTSecret)
 	adminH := admin.NewHandler(adminSvc)
 	analyticsH := analytics.NewHandler(analyticsSvc)
@@ -198,6 +202,7 @@ func New(deps Deps) *gin.Engine {
 	paymentsH.RegisterRoutes(authed)
 	disputesH.RegisterRoutes(authed)
 	reviewsH.RegisterRoutes(authed)
+	favoritesH.RegisterRoutes(authed)
 	notificationsH.RegisterRoutes(authed)
 
 	// Admin routes (JWT bearer + admin role).
