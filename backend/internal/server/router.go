@@ -136,7 +136,7 @@ func New(deps Deps) *gin.Engine {
 	searchSvc := search.NewService(searchRepo, presigner)
 	notificationsSvc := notifications.NewService(notificationsRepo, sender, hub)
 	ledgerSvc := ledger.NewService(ledgerRepo)
-	ordersSvc := orders.NewService(ordersRepo, ledgerSvc, notificationsSvc)
+	ordersSvc := orders.NewService(ordersRepo, ledgerSvc, notificationsSvc, presigner)
 	quotesSvc := quotes.NewService(quotesRepo, ordersSvc, notificationsSvc)
 	messagingSvc := messaging.NewService(messagingRepo, ordersSvc)
 	productionSvc := production.NewService(productionRepo, ordersSvc, notificationsSvc)

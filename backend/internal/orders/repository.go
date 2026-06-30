@@ -31,7 +31,10 @@ const orderColumns = `id, order_number, customer_id, baker_id, COALESCE(product_
 // business name) for list/detail reads. Leading comma so it follows orderColumns.
 const nameExprs = `,
 	COALESCE((SELECT name FROM users WHERE id = orders.customer_id), ''),
-	COALESCE((SELECT business_name FROM baker_profiles WHERE id = orders.baker_id), '')`
+	COALESCE((SELECT business_name FROM baker_profiles WHERE id = orders.baker_id), ''),
+	COALESCE((SELECT title FROM products WHERE id = orders.product_id), ''),
+	COALESCE((SELECT m.s3_key FROM product_images pim JOIN media m ON m.id = pim.media_id
+	          WHERE pim.product_id = orders.product_id ORDER BY pim.position LIMIT 1), '')`
 
 func scanOrder(row pgx.Row) (*Order, error) {
 	var o Order
@@ -101,7 +104,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Order, error) {
 		Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
 			&o.BalanceAmount, &o.CommissionAmount, &o.FulfillmentType, &o.DeliveryFee,
-			&o.CreatedAt, &o.CustomerName, &o.BakerName)
+			&o.CreatedAt, &o.CustomerName, &o.BakerName, &o.Title, &o.ProductImageURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -179,7 +182,7 @@ func (r *Repository) List(ctx context.Context, userID, bakerID string, f ListFil
 		if err := rows.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
 			&o.BalanceAmount, &o.CommissionAmount, &o.FulfillmentType, &o.DeliveryFee,
-			&o.CreatedAt, &o.CustomerName, &o.BakerName); err != nil {
+			&o.CreatedAt, &o.CustomerName, &o.BakerName, &o.Title, &o.ProductImageURL); err != nil {
 			return nil, err
 		}
 		out = append(out, o)

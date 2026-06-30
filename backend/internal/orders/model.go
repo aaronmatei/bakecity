@@ -23,8 +23,12 @@ type Order struct {
 	// personal name and the bakery's business name.
 	CustomerName string      `json:"customer_name,omitempty"`
 	BakerName    string      `json:"baker_name,omitempty"`
-	CreatedAt    time.Time   `json:"created_at"`
-	Specs        []OrderSpec `json:"specs,omitempty"`
+	// Title and ProductImageURL describe the order's product (the first item for
+	// a cart order) for list/detail display.
+	Title           string      `json:"title,omitempty"`
+	ProductImageURL string      `json:"product_image_url,omitempty"`
+	CreatedAt       time.Time   `json:"created_at"`
+	Specs           []OrderSpec `json:"specs,omitempty"`
 }
 
 // OrderSpec maps to the order_specs table (free-form spec attributes).

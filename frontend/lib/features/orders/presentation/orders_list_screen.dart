@@ -142,9 +142,13 @@ class _OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.cs;
-    final image = order.referenceImageUrls.isNotEmpty
-        ? order.referenceImageUrls.first
-        : null;
+    // Prefer the ordered product's photo; fall back to a customer design photo.
+    final image = (order.productImageUrl != null &&
+            order.productImageUrl!.isNotEmpty)
+        ? order.productImageUrl
+        : (order.referenceImageUrls.isNotEmpty
+            ? order.referenceImageUrls.first
+            : null);
     final completed = order.status == OrderStatus.completed;
     final cancelled = order.status == OrderStatus.cancelled;
     // The agreed price is the order total, set once a quote is accepted.

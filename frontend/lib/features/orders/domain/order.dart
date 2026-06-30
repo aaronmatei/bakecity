@@ -32,6 +32,7 @@ class Order {
     this.number,
     this.productId,
     this.title,
+    this.productImageUrl,
     this.description,
     this.referenceImageUrls = const [],
     this.eventDate,
@@ -56,6 +57,7 @@ class Order {
   final String? productId;
   final OrderStatus status;
   final String? title;
+  final String? productImageUrl;
   final String? description;
   final List<String> referenceImageUrls;
   final DateTime? eventDate;
@@ -90,6 +92,7 @@ class Order {
       productId: json['product_id']?.toString(),
       status: parseOrderStatus(json['status'] as String?),
       title: json['title'] as String?,
+      productImageUrl: json['product_image_url'] as String?,
       description: json['description'] as String?,
       referenceImageUrls: (json['reference_image_urls'] as List?)
               ?.map((e) => e.toString())
@@ -125,6 +128,7 @@ class Order {
         'product_id': productId,
         'status': status.name,
         'title': title,
+        'product_image_url': productImageUrl,
         'description': description,
         'reference_image_urls': referenceImageUrls,
         'event_date': eventDate?.toIso8601String(),

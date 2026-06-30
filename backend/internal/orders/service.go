@@ -11,7 +11,11 @@ import (
 	"github.com/corebalt/bakecity/internal/ledger"
 	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/pkg"
+	"github.com/corebalt/bakecity/pkg/storage"
 )
+
+// productImageTTL is how long a resolved order product-image URL stays valid.
+const productImageTTL = 1 * time.Hour
 
 // Actor identifies the authenticated caller for authorization checks.
 type Actor struct {
@@ -22,15 +26,16 @@ type Actor struct {
 // Service implements order business logic, including scheduling guards and the
 // state-machine transitions.
 type Service struct {
-	repo   *Repository
-	ledger *ledger.Service
-	notify *notifications.Service
-	now    func() time.Time
+	repo      *Repository
+	ledger    *ledger.Service
+	notify    *notifications.Service
+	presigner storage.Presigner
+	now       func() time.Time
 }
 
 // NewService constructs a Service.
-func NewService(repo *Repository, ledgerSvc *ledger.Service, notifySvc *notifications.Service) *Service {
-	return &Service{repo: repo, ledger: ledgerSvc, notify: notifySvc, now: time.Now}
+func NewService(repo *Repository, ledgerSvc *ledger.Service, notifySvc *notifications.Service, presigner storage.Presigner) *Service {
+	return &Service{repo: repo, ledger: ledgerSvc, notify: notifySvc, presigner: presigner, now: time.Now}
 }
 
 // BakerInsights returns the signed-in baker's order-book summary.
@@ -224,6 +229,7 @@ func (s *Service) Get(ctx context.Context, actor Actor, id string) (*Order, erro
 		return nil, err
 	}
 	o.Specs = specs
+	o.ProductImageURL = storage.ResolveURL(ctx, s.presigner, o.ProductImageURL, productImageTTL)
 	return o, nil
 }
 
@@ -233,7 +239,14 @@ func (s *Service) List(ctx context.Context, actor Actor, f ListFilter) ([]Order,
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.List(ctx, actor.UserID, bakerID, f)
+	orders, err := s.repo.List(ctx, actor.UserID, bakerID, f)
+	if err != nil {
+		return nil, err
+	}
+	for i := range orders {
+		orders[i].ProductImageURL = storage.ResolveURL(ctx, s.presigner, orders[i].ProductImageURL, productImageTTL)
+	}
+	return orders, nil
 }
 
 // Cancellation refund policy defaults (architecture §7). These are platform-wide
