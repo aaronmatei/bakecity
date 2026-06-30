@@ -6,17 +6,15 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../home/widgets/product_card.dart';
-import '../../products/application/products_controller.dart';
 import '../application/favorites_controller.dart';
 
-/// The saved-treats grid, backed by the on-device favorites set.
+/// The saved-treats grid, backed by the user's server-synced wishlist.
 class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final favorites = ref.watch(favoritesProvider);
-    final products = ref.watch(productsProvider(null));
+    final products = ref.watch(favoriteProductsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
@@ -24,11 +22,9 @@ class FavoritesScreen extends ConsumerWidget {
         loading: () => const LoadingIndicator(),
         error: (e, _) => AppErrorView(
           message: e.toString(),
-          onRetry: () => ref.invalidate(productsProvider(null)),
+          onRetry: () => ref.invalidate(favoriteProductsProvider),
         ),
-        data: (all) {
-          final saved =
-              all.where((p) => favorites.contains(p.id)).toList();
+        data: (saved) {
           if (saved.isEmpty) {
             return const EmptyState(
               icon: Icons.favorite_border_rounded,

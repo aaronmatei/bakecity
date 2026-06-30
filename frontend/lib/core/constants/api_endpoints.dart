@@ -41,6 +41,10 @@ class ApiEndpoints {
   static String product(String id) => '/products/$id';
   static const String categories = '/categories';
 
+  // ---- Favorites (wishlist) ----
+  static const String favorites = '/favorites';
+  static String favorite(String productId) => '/favorites/$productId';
+
   // ---- Orders ----
   static const String orders = '/orders';
   static const String orderInsights = '/orders/insights';
