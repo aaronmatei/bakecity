@@ -160,20 +160,55 @@ class _CoverBar extends ConsumerWidget {
   }
 }
 
-class _StoreInfo extends StatelessWidget {
+class _StoreInfo extends ConsumerWidget {
   const _StoreInfo({required this.baker, required this.bakerId});
   final MyBakerProfile baker;
   final String bakerId;
 
+  Future<void> _changeAvatar(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id = await ref
+          .read(uploadServiceProvider)
+          .pickAndUpload(kind: MediaKind.bakerAvatar);
+      if (id != null) {
+        ref.invalidate(bakerProfileProvider(bakerId));
+        messenger.showSnackBar(const SnackBar(content: Text('Logo updated.')));
+      }
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.cs;
+    final isOwner =
+        ref.watch(onboardingControllerProvider).valueOrNull?.id == bakerId;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-          Insets.screenH, Insets.lg, Insets.screenH, 0),
+      padding: const EdgeInsets.fromLTRB(Insets.screenH, 0, Insets.screenH, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Circular logo straddling the cover above.
+          SizedBox(
+            height: 40,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: -44,
+                  left: 0,
+                  child: _AvatarBubble(
+                    url: baker.avatarUrl,
+                    isOwner: isOwner,
+                    onTap: () => _changeAvatar(context, ref),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: Insets.sm),
           if (baker.isApproved)
             Row(
               children: [
@@ -246,6 +281,59 @@ class _StoreInfo extends StatelessWidget {
           const SizedBox(height: Insets.xl),
           Text('Menu', style: context.tt.titleLarge),
           const SizedBox(height: Insets.md),
+        ],
+      ),
+    );
+  }
+}
+
+/// The baker's circular logo straddling the cover. Tappable to upload for the
+/// owner (with a small camera badge).
+class _AvatarBubble extends StatelessWidget {
+  const _AvatarBubble({
+    required this.url,
+    required this.isOwner,
+    required this.onTap,
+  });
+  final String? url;
+  final bool isOwner;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final hasUrl = url != null && url!.isNotEmpty;
+    return GestureDetector(
+      onTap: isOwner ? onTap : null,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(color: cs.surface, shape: BoxShape.circle),
+            child: CircleAvatar(
+              radius: 40,
+              backgroundColor: cs.primary.withValues(alpha: 0.12),
+              backgroundImage: hasUrl ? NetworkImage(url!) : null,
+              child: hasUrl
+                  ? null
+                  : Icon(Icons.storefront, color: cs.primary, size: 30),
+            ),
+          ),
+          if (isOwner)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.surface, width: 2),
+                ),
+                child: Icon(Icons.camera_alt, size: 13, color: cs.onPrimary),
+              ),
+            ),
         ],
       ),
     );

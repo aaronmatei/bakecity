@@ -15,6 +15,7 @@ class MyBakerProfile {
     this.lng,
     this.followerCount = 0,
     this.coverImageUrl,
+    this.avatarUrl,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class MyBakerProfile {
 
   /// Presigned storefront cover image URL, when the baker has uploaded one.
   final String? coverImageUrl;
+
+  /// Presigned storefront logo/avatar URL, when set.
+  final String? avatarUrl;
 
   /// Approved bakers may publish products and receive orders.
   bool get isApproved => status == BakerStatus.approved;
@@ -65,6 +69,7 @@ class MyBakerProfile {
       lng: (json['lng'] as num?)?.toDouble(),
       followerCount: (json['follower_count'] as num?)?.toInt() ?? 0,
       coverImageUrl: json['cover_image_url'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
     );
   }
 }
