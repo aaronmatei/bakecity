@@ -52,6 +52,18 @@ class InsightsScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(Insets.screenH),
               children: [
+                Row(
+                  children: [
+                    Icon(Icons.favorite, size: 16, color: context.cs.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${d.followerCount} follower${d.followerCount == 1 ? '' : 's'}',
+                      style: context.tt.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Insets.md),
                 _RevenueCard(insights: d),
                 const SizedBox(height: Insets.lg),
                 Row(
