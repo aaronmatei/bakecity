@@ -15,6 +15,7 @@ class Formatters {
   static final DateFormat _eventDate = DateFormat('EEE, d MMM yyyy');
   static final DateFormat _eventDateTime = DateFormat('EEE, d MMM yyyy • h:mm a');
   static final DateFormat _shortDate = DateFormat('d MMM');
+  static final DateFormat _clock = DateFormat('h:mm a');
 
   /// Formats a minor-unit amount (cents) as KES currency.
   static String currencyFromCents(int cents) =>
@@ -32,6 +33,9 @@ class Formatters {
 
   /// Compact date label, e.g. "4 Jul".
   static String shortDate(DateTime date) => _shortDate.format(date.toLocal());
+
+  /// Clock time, e.g. "9:42 AM" — used for delivery ETAs.
+  static String clockTime(DateTime time) => _clock.format(time.toLocal());
 
   /// Relative, human-friendly description of a past timestamp.
   static String relativeTime(DateTime time) {

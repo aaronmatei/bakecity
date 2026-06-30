@@ -8,13 +8,13 @@ import '../../../services/upload_service.dart';
 import '../../../widgets/app_error_view.dart';
 import '../../../widgets/info_note.dart';
 import '../../../widgets/loading_indicator.dart';
-import '../../../widgets/media_thumbnail.dart';
 import '../../../widgets/primary_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../media/application/media_controller.dart';
 import '../../orders/application/orders_controller.dart';
 import '../application/delivery_controller.dart';
 import '../domain/delivery.dart';
+import 'delivery_tracking.dart';
 
 /// Delivery dispatch + proof-of-delivery confirmation for an order.
 class DeliveryView extends ConsumerStatefulWidget {
@@ -94,8 +94,9 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     final async = ref.watch(orderDeliveryProvider(widget.orderId));
     final isBaker =
         ref.watch(authControllerProvider).user?.role == UserRole.baker;
-    final orderStatus =
-        ref.watch(orderDetailProvider(widget.orderId)).valueOrNull?.status;
+    final order =
+        ref.watch(orderDetailProvider(widget.orderId)).valueOrNull;
+    final orderStatus = order?.status;
     final media =
         ref.watch(orderMediaProvider(widget.orderId)).valueOrNull ?? const [];
     final proofs =
@@ -111,71 +112,18 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
       data: (delivery) => ListView(
         padding: const EdgeInsets.all(Insets.screenH),
         children: [
-          _statusCard(delivery, proofUrl),
+          DeliveryTracking(
+            delivery: delivery,
+            status: orderStatus,
+            order: order,
+            isCustomer: !isBaker,
+            proofUrl: proofUrl,
+          ),
           const SizedBox(height: Insets.lg),
           if (isBaker)
             ..._bakerActions(delivery, orderStatus)
           else
             _customerActions(delivery, orderStatus),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusCard(Delivery? d, String? proofUrl) {
-    final cs = context.cs;
-    final (IconData icon, String subtitle, Color tone) = d == null
-        ? (Icons.local_shipping_outlined, 'Not yet dispatched', cs.onSurfaceVariant)
-        : d.isDelivered
-            ? (Icons.check_circle_outline, 'Delivered', context.bake.success)
-            : d.awaitingConfirmation
-                ? (Icons.hourglass_top_outlined,
-                    'Proof submitted — awaiting confirmation', cs.primary)
-                : d.isDispatched
-                    ? (Icons.local_shipping_outlined,
-                        'Out for delivery (${d.method})', cs.primary)
-                    : (Icons.schedule_outlined, 'Pending', cs.onSurfaceVariant);
-
-    return Container(
-      padding: const EdgeInsets.all(Insets.lg),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: Radii.cardBorder,
-        boxShadow: context.bake.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: tone),
-              const SizedBox(width: Insets.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Delivery status',
-                      style: context.tt.labelMedium
-                          ?.copyWith(color: cs.onSurfaceVariant)),
-                  Text(subtitle,
-                      style: context.tt.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ],
-          ),
-          if (proofUrl != null) ...[
-            const SizedBox(height: Insets.lg),
-            Row(
-              children: [
-                MediaThumbnail(url: proofUrl, size: 64),
-                const SizedBox(width: Insets.md),
-                Expanded(
-                  child: Text('Proof of delivery',
-                      style: context.tt.bodyMedium),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
