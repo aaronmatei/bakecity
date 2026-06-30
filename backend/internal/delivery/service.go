@@ -144,6 +144,11 @@ func (s *Service) markDelivered(ctx context.Context, order *orders.Order, proofM
 	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
 		s.notify.Notify(ctx, bakerUserID, notifications.TypeDelivered, map[string]any{"order_id": order.ID})
 	}
+	// Fully-prepaid (buy-now) orders owe no balance, so delivery completes them
+	// and releases the escrow to the baker. No-op when a balance is still due.
+	if err := s.orders.FinalizeZeroBalance(ctx, order.ID); err != nil {
+		return nil, err
+	}
 	return d, nil
 }
 

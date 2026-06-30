@@ -45,6 +45,11 @@ type CreateOrderRequest struct {
 	Lat             *float64    `json:"lat"`
 	Lng             *float64    `json:"lng"`
 	Specs           []SpecInput `json:"specs"`
+	// BuyNow orders a fixed (non-custom) product at its listed price, skipping
+	// the quote: the order is created already priced + approved (full payment
+	// upfront). SizeID picks a specific size's price when set.
+	BuyNow bool   `json:"buy_now"`
+	SizeID string `json:"size_id"`
 }
 
 // SpecInput is a single order spec attribute in a CreateOrderRequest.

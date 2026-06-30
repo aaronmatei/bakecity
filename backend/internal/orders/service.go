@@ -81,7 +81,75 @@ func (s *Service) Create(ctx context.Context, customerID string, req CreateOrder
 		FulfillmentType: fulfillment,
 		Status:          StatusQuoteRequested,
 	}
-	return s.repo.Create(ctx, o, eventDate, req.Lat, req.Lng, specs)
+	created, err := s.repo.Create(ctx, o, eventDate, req.Lat, req.Lng, specs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Buy-now: a fixed product is priced and approved immediately (full payment
+	// upfront), skipping the quote.
+	if req.BuyNow {
+		price, perr := s.priceForBuyNow(ctx, req.ProductID, req.SizeID)
+		if perr != nil {
+			return nil, perr
+		}
+		commission := round2(price * CommissionRate)
+		if err := s.repo.SetAmountsAndStatus(ctx, created.ID, price, price, 0, commission, 0, StatusApproved); err != nil {
+			return nil, err
+		}
+		created.TotalAmount, created.DepositAmount, created.BalanceAmount = price, price, 0
+		created.CommissionAmount, created.Status = commission, StatusApproved
+	}
+	return created, nil
+}
+
+// priceForBuyNow returns the firm price of a fixed product (optionally a chosen
+// size), applying any active offer discount. Errors if the product is
+// made-to-order or has no price.
+func (s *Service) priceForBuyNow(ctx context.Context, productID, sizeID string) (float64, error) {
+	if productID == "" {
+		return 0, pkg.NewAPIError(http.StatusBadRequest, pkg.ErrCodeValidation, "buy_now requires a product")
+	}
+	price, isCustom, onOffer, discountPct, err := s.repo.ProductPricing(ctx, productID, sizeID)
+	if err != nil {
+		return 0, err
+	}
+	if isCustom {
+		return 0, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "this product is made to order — request a quote instead")
+	}
+	if onOffer && discountPct > 0 {
+		price = price * float64(100-discountPct) / 100
+	}
+	price = round2(price)
+	if price <= 0 {
+		return 0, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "product has no fixed price")
+	}
+	return price, nil
+}
+
+// FinalizeZeroBalance completes a DELIVERED order that owes no balance (e.g. a
+// fully-prepaid buy-now order): it releases the held escrow to the baker and
+// moves the order to COMPLETED. No-op for orders with a balance still due.
+func (s *Service) FinalizeZeroBalance(ctx context.Context, orderID string) error {
+	o, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	if o.Status != StatusDelivered || o.BalanceAmount > 0 {
+		return nil
+	}
+	if err := s.ledger.RecordBalanceAndRelease(ctx, o.ID, o.CustomerID, o.BakerID, 0, o.TotalAmount, o.CommissionAmount); err != nil {
+		return err
+	}
+	if err := s.advance(ctx, o.ID, StatusDelivered, StatusCompleted); err != nil {
+		return err
+	}
+	s.notify.Notify(ctx, o.CustomerID, notifications.TypeOrderCompleted, map[string]any{"order_id": o.ID})
+	s.notify.Notify(ctx, o.CustomerID, notifications.TypeReviewRequest, map[string]any{"order_id": o.ID})
+	if bakerUserID, err := s.BakerUserID(ctx, o.BakerID); err == nil {
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeOrderCompleted, map[string]any{"order_id": o.ID})
+	}
+	return nil
 }
 
 // Get returns an order (with specs) if the actor participates in it.

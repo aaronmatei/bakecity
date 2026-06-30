@@ -196,6 +196,38 @@ func (r *Repository) UpdateStatus(ctx context.Context, id, status string) error 
 	return err
 }
 
+// ProductPricing returns a product's list price and whether it's made-to-order.
+// When sizeID is set and belongs to the product, that size's price is used.
+func (r *Repository) ProductPricing(ctx context.Context, productID, sizeID string) (price float64, isCustom, onOffer bool, discountPct int, err error) {
+	if r.db == nil {
+		return 0, false, false, 0, pkg.ErrNotImplemented
+	}
+	var dp *int
+	err = r.db.QueryRow(ctx,
+		`SELECT base_price, is_custom, is_on_offer, discount_pct FROM products WHERE id = $1`,
+		productID,
+	).Scan(&price, &isCustom, &onOffer, &dp)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, false, 0, pkg.ErrNotFound
+	}
+	if err != nil {
+		return 0, false, false, 0, err
+	}
+	if dp != nil {
+		discountPct = *dp
+	}
+	if sizeID != "" {
+		var sp float64
+		if e := r.db.QueryRow(ctx,
+			`SELECT price FROM product_sizes WHERE id = $1 AND product_id = $2`,
+			sizeID, productID,
+		).Scan(&sp); e == nil {
+			price = sp
+		}
+	}
+	return price, isCustom, onOffer, discountPct, nil
+}
+
 // BakerIDForUser resolves the baker_profiles.id owned by userID, or "" if none.
 func (r *Repository) BakerIDForUser(ctx context.Context, userID string) (string, error) {
 	if r.db == nil {
