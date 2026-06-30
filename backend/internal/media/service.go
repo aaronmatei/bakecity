@@ -126,16 +126,12 @@ func (s *Service) ListByOwnerKind(ctx context.Context, ownerID, kind string) ([]
 	return items, nil
 }
 
-// attachURLs resolves short-lived presigned download URLs for a media record's
-// full image and thumbnail (best-effort; a failure leaves the URL empty).
+// attachURLs resolves view URLs for a media record. Seeded/external media store
+// a full URL in s3_key (passed through); uploaded object keys are presigned.
 func (s *Service) attachURLs(ctx context.Context, m *Media) {
-	if url, err := s.presigner.PresignDownload(ctx, m.S3Key, downloadTTL); err == nil {
-		m.URL = url
-	}
+	m.URL = storage.ResolveURL(ctx, s.presigner, m.S3Key, downloadTTL)
 	if m.ThumbKey != "" {
-		if url, err := s.presigner.PresignDownload(ctx, m.ThumbKey, downloadTTL); err == nil {
-			m.ThumbURL = url
-		}
+		m.ThumbURL = storage.ResolveURL(ctx, s.presigner, m.ThumbKey, downloadTTL)
 	}
 }
 

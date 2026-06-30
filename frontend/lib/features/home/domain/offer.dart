@@ -34,6 +34,7 @@ const List<Offer> curatedOffers = [
     subtitle: 'Book a tiered cake and save this week',
     badge: '-15%',
     categorySlug: 'wedding',
+    imageUrl: 'https://loremflickr.com/1000/520/wedding,cake?lock=2201',
   ),
   Offer(
     id: 'cupcakes',
@@ -41,6 +42,7 @@ const List<Offer> curatedOffers = [
     subtitle: 'A dozen handcrafted cupcakes, freshly baked',
     badge: '-20%',
     categorySlug: 'cupcakes',
+    imageUrl: 'https://loremflickr.com/1000/520/cupcakes?lock=2202',
   ),
   Offer(
     id: 'custom',
@@ -48,6 +50,7 @@ const List<Offer> curatedOffers = [
     subtitle: 'Custom orders from top-rated local bakers',
     badge: 'New',
     categorySlug: 'custom',
+    imageUrl: 'https://loremflickr.com/1000/520/birthday,cake?lock=2203',
   ),
 ];
 
