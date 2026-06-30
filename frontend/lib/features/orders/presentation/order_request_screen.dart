@@ -31,6 +31,8 @@ class OrderRequestScreen extends ConsumerWidget {
     super.key,
     required this.productId,
     this.initialSize,
+    this.buyNow = false,
+    this.sizeId,
   });
 
   final String productId;
@@ -38,12 +40,16 @@ class OrderRequestScreen extends ConsumerWidget {
   /// The size the customer chose on the product detail screen, if any.
   final String? initialSize;
 
+  /// Buy a fixed product directly at its listed price (no quote).
+  final bool buyNow;
+  final String? sizeId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final product = ref.watch(productDetailProvider(productId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Request a custom order')),
+      appBar: AppBar(title: Text(buyNow ? 'Place order' : 'Request a quote')),
       body: SafeArea(
         child: product.when(
           loading: () => const LoadingIndicator(),
@@ -51,7 +57,12 @@ class OrderRequestScreen extends ConsumerWidget {
             message: e is AppException ? e.message : e.toString(),
             onRetry: () => ref.invalidate(productDetailProvider(productId)),
           ),
-          data: (p) => _OrderRequestForm(product: p, initialSize: initialSize),
+          data: (p) => _OrderRequestForm(
+            product: p,
+            initialSize: initialSize,
+            buyNow: buyNow,
+            sizeId: sizeId,
+          ),
         ),
       ),
     );
@@ -59,10 +70,17 @@ class OrderRequestScreen extends ConsumerWidget {
 }
 
 class _OrderRequestForm extends ConsumerStatefulWidget {
-  const _OrderRequestForm({required this.product, this.initialSize});
+  const _OrderRequestForm({
+    required this.product,
+    this.initialSize,
+    this.buyNow = false,
+    this.sizeId,
+  });
 
   final Product product;
   final String? initialSize;
+  final bool buyNow;
+  final String? sizeId;
 
   @override
   ConsumerState<_OrderRequestForm> createState() => _OrderRequestFormState();
@@ -145,6 +163,8 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
             productId: widget.product.id,
             eventDate: _eventDate!,
             fulfillment: _fulfillment,
+            buyNow: widget.buyNow,
+            sizeId: widget.sizeId,
             deliveryAddress:
                 _fulfillment == 'delivery' ? _address.text.trim() : '',
             specs: _buildSpecs(),
@@ -156,9 +176,11 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            failedUploads == 0
-                ? 'Request sent — the baker will quote you.'
-                : 'Request sent. $failedUploads photo(s) couldn’t upload.',
+            widget.buyNow
+                ? 'Order placed — pay to confirm.'
+                : failedUploads == 0
+                    ? 'Request sent — the baker will quote you.'
+                    : 'Request sent. $failedUploads photo(s) couldn’t upload.',
           ),
         ),
       );
@@ -244,8 +266,10 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Tell the baker what you need. They’ll review and send you a '
-                'price quote to approve before any payment.',
+                widget.buyNow
+                    ? 'Confirm your details below, then pay to place the order.'
+                    : 'Tell the baker what you need. They’ll review and send you a '
+                        'price quote to approve before any payment.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -373,8 +397,10 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
               ],
               const SizedBox(height: 28),
               PrimaryButton(
-                label: 'Send request',
-                icon: Icons.send_outlined,
+                label: widget.buyNow ? 'Place order' : 'Send request',
+                icon: widget.buyNow
+                    ? Icons.shopping_bag_outlined
+                    : Icons.send_outlined,
                 isLoading: _submitting,
                 onPressed: _submit,
               ),

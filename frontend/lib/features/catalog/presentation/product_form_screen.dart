@@ -67,6 +67,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _categoryId;
   late bool _available;
   late bool _isOnOffer;
+  late bool _isCustom;
   String? _occasion;
   String? _flavor;
   String? _format;
@@ -91,6 +92,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _categoryId = p?.categoryId;
     _available = p?.isAvailable ?? true;
     _isOnOffer = p?.isOnOffer ?? false;
+    _isCustom = p?.isCustomizable ?? false;
     _occasion = p?.cakeOccasion;
     _flavor = p?.cakeFlavor;
     _format = p?.cakeFormat;
@@ -190,6 +192,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
           imageMediaIds: _images.map((e) => e.mediaId).toList(),
+          isCustom: _isCustom,
         );
       } else {
         await ctrl.createProduct(
@@ -206,6 +209,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           cakeFormat: cakes ? _format : null,
           sizes: sizes,
           imageMediaIds: _images.map((e) => e.mediaId).toList(),
+          isCustom: _isCustom,
         );
       }
       ref.invalidate(bakerManageProductsProvider(widget.bakerId));
@@ -302,6 +306,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   if (n == null || n < 0) return 'Enter a whole number';
                   return null;
                 },
+              ),
+
+              const SizedBox(height: Insets.sm),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isCustom,
+                onChanged: (v) => setState(() => _isCustom = v),
+                secondary: const Icon(Icons.tune_outlined),
+                title: const Text('Made to order'),
+                subtitle: Text(
+                  _isCustom
+                      ? 'Customers request a quote; you set the price.'
+                      : 'Sold as-is — customers order now at the listed price.',
+                  style: context.tt.bodySmall,
+                ),
               ),
 
               // Cake attributes.

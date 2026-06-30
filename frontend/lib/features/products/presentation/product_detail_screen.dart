@@ -407,17 +407,28 @@ class _CtaBar extends ConsumerWidget {
             const SizedBox(width: Insets.lg),
             Expanded(
               child: FilledButton.icon(
-                onPressed: () => context.pushNamed(
-                  AppRoutes.productOrderRequestName,
-                  pathParameters: {'productId': product.id},
-                  queryParameters: {
-                    if (product.sizes.isNotEmpty) 'size': label,
-                  },
-                ),
-                icon: const Icon(Icons.add_shopping_cart_outlined),
-                label: Text(product.isCustomizable && product.sizes.isEmpty
-                    ? 'Request quote'
-                    : 'Request order'),
+                onPressed: () {
+                  final effectiveSizeId = sizeId ??
+                      (product.sizes.isNotEmpty
+                          ? product.sizes.first.id
+                          : null);
+                  context.pushNamed(
+                    AppRoutes.productOrderRequestName,
+                    pathParameters: {'productId': product.id},
+                    queryParameters: {
+                      if (product.sizes.isNotEmpty) 'size': label,
+                      // Fixed (non-custom) products are bought directly at the
+                      // listed price; custom products go through a quote.
+                      if (!product.isCustomizable) 'buy_now': 'true',
+                      if (!product.isCustomizable && effectiveSizeId != null)
+                        'size_id': effectiveSizeId,
+                    },
+                  );
+                },
+                icon: Icon(product.isCustomizable
+                    ? Icons.request_quote_outlined
+                    : Icons.add_shopping_cart_outlined),
+                label: Text(product.isCustomizable ? 'Request a quote' : 'Order now'),
               ),
             ),
           ],

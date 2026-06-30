@@ -183,6 +183,7 @@ class CatalogController {
     String? cakeFormat,
     List<Map<String, dynamic>> sizes = const [],
     List<String> imageMediaIds = const [],
+    bool isCustom = false,
   }) async {
     await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
       ApiEndpoints.products,
@@ -193,6 +194,7 @@ class CatalogController {
           'description': description,
         'base_price': basePriceCents / 100,
         if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
+        'is_custom': isCustom,
         'dietary': dietary,
         'is_on_offer': isOnOffer,
         if (discountPct != null) 'discount_pct': discountPct,
@@ -223,6 +225,7 @@ class CatalogController {
     String? cakeFormat,
     List<Map<String, dynamic>>? sizes,
     List<String>? imageMediaIds,
+    bool? isCustom,
   }) async {
     await _ref.read(apiClientProvider).patch<Map<String, dynamic>>(
       ApiEndpoints.product(id),
@@ -233,6 +236,7 @@ class CatalogController {
         if (description != null) 'description': description,
         if (categoryId != null) 'category_id': categoryId,
         if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
+        if (isCustom != null) 'is_custom': isCustom,
         if (dietary != null) 'dietary': dietary,
         if (isOnOffer != null) 'is_on_offer': isOnOffer,
         if (discountPct != null) 'discount_pct': discountPct,
