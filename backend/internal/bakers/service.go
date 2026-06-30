@@ -37,7 +37,8 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateBakerRequ
 	return s.repo.Create(ctx, userID, req)
 }
 
-// Get returns a baker profile by id, including its follower count.
+// Get returns a baker profile by id, including its follower count and (if set)
+// a presigned storefront cover URL.
 func (s *Service) Get(ctx context.Context, id string) (*BakerProfile, error) {
 	profile, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -45,6 +46,9 @@ func (s *Service) Get(ctx context.Context, id string) (*BakerProfile, error) {
 	}
 	if n, err := s.repo.FollowerCount(ctx, id); err == nil {
 		profile.FollowerCount = n
+	}
+	if covers, err := s.media.ListByOwnerKind(ctx, profile.UserID, media.KindBakerCover); err == nil && len(covers) > 0 {
+		profile.CoverImageURL = covers[0].URL
 	}
 	return profile, nil
 }
