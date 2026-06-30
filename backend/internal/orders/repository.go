@@ -244,6 +244,12 @@ func (r *Repository) BakerInsights(ctx context.Context, bakerID string) (*BakerI
 		return nil, err
 	}
 
+	if err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM favorite_bakers WHERE baker_id = $1`, bakerID,
+	).Scan(&out.FollowerCount); err != nil {
+		return nil, err
+	}
+
 	prows, err := r.db.Query(ctx,
 		`SELECT o.product_id, p.title, COUNT(*), COALESCE(SUM(o.total_amount), 0)
 		   FROM orders o JOIN products p ON p.id = o.product_id

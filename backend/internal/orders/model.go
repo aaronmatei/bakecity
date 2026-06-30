@@ -84,6 +84,7 @@ type BakerInsights struct {
 	CompletedOrders int            `json:"completed_orders"`
 	GrossRevenue    float64        `json:"gross_revenue"`
 	NetRevenue      float64        `json:"net_revenue"`
+	FollowerCount   int            `json:"follower_count"`
 	TopProducts     []ProductPerf  `json:"top_products"`
 	RevenueTrend    []TrendPoint   `json:"revenue_trend"`
 }
