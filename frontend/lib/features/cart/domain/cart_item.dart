@@ -34,4 +34,26 @@ class CartItem {
         sizeLabel: sizeLabel,
         qty: qty ?? this.qty,
       );
+
+  Map<String, dynamic> toJson() => {
+        'productId': productId,
+        'bakerId': bakerId,
+        'title': title,
+        'unitPriceCents': unitPriceCents,
+        'imageUrl': imageUrl,
+        'sizeId': sizeId,
+        'sizeLabel': sizeLabel,
+        'qty': qty,
+      };
+
+  factory CartItem.fromJson(Map<String, dynamic> j) => CartItem(
+        productId: j['productId'] as String,
+        bakerId: j['bakerId'] as String,
+        title: j['title'] as String,
+        unitPriceCents: (j['unitPriceCents'] as num).toInt(),
+        imageUrl: j['imageUrl'] as String?,
+        sizeId: j['sizeId'] as String?,
+        sizeLabel: j['sizeLabel'] as String?,
+        qty: (j['qty'] as num?)?.toInt() ?? 1,
+      );
 }
