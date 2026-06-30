@@ -440,8 +440,14 @@ class _CtaBar extends ConsumerWidget {
                         sizeId: effectiveSizeId,
                         sizeLabel: product.sizes.isNotEmpty ? label : null,
                       ));
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: const Text('Added to cart.'),
+                  // Replace any visible toast so rapid adds don't queue/stack
+                  // over the button; keep it brief and floating.
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.hideCurrentSnackBar();
+                  messenger.showSnackBar(SnackBar(
+                    content: const Text('Added to cart'),
+                    duration: const Duration(milliseconds: 1200),
+                    behavior: SnackBarBehavior.floating,
                     action: SnackBarAction(
                       label: 'View cart',
                       onPressed: () => context.pushNamed(AppRoutes.cartName),
