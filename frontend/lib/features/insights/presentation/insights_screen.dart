@@ -152,10 +152,74 @@ class _RevenueCard extends StatelessWidget {
             style: context.tt.bodyMedium
                 ?.copyWith(color: cs.onPrimary.withValues(alpha: 0.9)),
           ),
+          if (insights.revenueTrendCents.where((v) => v > 0).isNotEmpty) ...[
+            const SizedBox(height: Insets.lg),
+            SizedBox(
+              height: 44,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _SparklinePainter(
+                  values: insights.revenueTrendCents,
+                  color: cs.onPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: Insets.xs),
+            Text('Net revenue · last 6 months',
+                style: context.tt.labelSmall
+                    ?.copyWith(color: cs.onPrimary.withValues(alpha: 0.85))),
+          ],
         ],
       ),
     );
   }
+}
+
+/// A minimal area sparkline over the monthly revenue values (baseline at zero).
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({required this.values, required this.color});
+  final List<int> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    final maxV = values.reduce((a, b) => a > b ? a : b).toDouble();
+    final range = maxV <= 0 ? 1.0 : maxV;
+    final dx = size.width / (values.length - 1);
+    final points = <Offset>[
+      for (var i = 0; i < values.length; i++)
+        Offset(i * dx, size.height - (values[i] / range) * size.height),
+    ];
+
+    final fill = Path()..moveTo(points.first.dx, size.height);
+    for (final p in points) {
+      fill.lineTo(p.dx, p.dy);
+    }
+    fill
+      ..lineTo(points.last.dx, size.height)
+      ..close();
+    canvas.drawPath(
+        fill, Paint()..color = color.withValues(alpha: 0.18));
+
+    final line = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) {
+      line.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawCircle(points.last, 3, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) => old.values != values;
 }
 
 class _ProductRow extends StatelessWidget {

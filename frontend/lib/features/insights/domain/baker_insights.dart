@@ -31,6 +31,7 @@ class BakerInsights {
     required this.grossRevenueCents,
     required this.netRevenueCents,
     required this.topProducts,
+    this.revenueTrendCents = const [],
   });
 
   final Map<String, int> statusCounts;
@@ -38,6 +39,9 @@ class BakerInsights {
   final int grossRevenueCents;
   final int netRevenueCents;
   final List<ProductPerf> topProducts;
+
+  /// Net revenue per month (cents), oldest → newest, for the trend sparkline.
+  final List<int> revenueTrendCents;
 
   factory BakerInsights.fromJson(Map<String, dynamic> json) {
     final counts = <String, int>{};
@@ -53,6 +57,10 @@ class BakerInsights {
           (((json['net_revenue'] as num?)?.toDouble() ?? 0) * 100).round(),
       topProducts: ((json['top_products'] as List?) ?? const [])
           .map((e) => ProductPerf.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      revenueTrendCents: ((json['revenue_trend'] as List?) ?? const [])
+          .map((e) =>
+              (((e['revenue'] as num?)?.toDouble() ?? 0) * 100).round())
           .toList(),
     );
   }
