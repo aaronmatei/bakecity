@@ -33,7 +33,7 @@
              a GoogleMap is shown. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyD1CAhqQFRM9BzC9E8WAIa1vJxLIgeaXS0" />
+            android:value="AIzaSyCdDOsGynwtGfFE9_PaHpiCmi1-zmValUI" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
