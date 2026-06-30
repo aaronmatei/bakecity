@@ -12,6 +12,8 @@ import '../../../widgets/network_photo.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/rating_pill.dart';
 import '../../bakers/application/baker_storefront_controller.dart';
+import '../../cart/application/cart_controller.dart';
+import '../../cart/domain/cart_item.dart';
 import '../../home/widgets/product_card.dart' show productHeroTag;
 import '../application/products_controller.dart';
 import '../domain/product.dart';
@@ -412,27 +414,45 @@ class _CtaBar extends ConsumerWidget {
             Expanded(
               child: FilledButton.icon(
                 onPressed: () {
+                  // Custom products go through a quote; fixed ones go to the cart.
+                  if (product.isCustomizable) {
+                    context.pushNamed(
+                      AppRoutes.productOrderRequestName,
+                      pathParameters: {'productId': product.id},
+                      queryParameters: {
+                        if (product.sizes.isNotEmpty) 'size': label,
+                      },
+                    );
+                    return;
+                  }
                   final effectiveSizeId = sizeId ??
                       (product.sizes.isNotEmpty
                           ? product.sizes.first.id
                           : null);
-                  context.pushNamed(
-                    AppRoutes.productOrderRequestName,
-                    pathParameters: {'productId': product.id},
-                    queryParameters: {
-                      if (product.sizes.isNotEmpty) 'size': label,
-                      // Fixed (non-custom) products are bought directly at the
-                      // listed price; custom products go through a quote.
-                      if (!product.isCustomizable) 'buy_now': 'true',
-                      if (!product.isCustomizable && effectiveSizeId != null)
-                        'size_id': effectiveSizeId,
-                    },
-                  );
+                  ref.read(cartProvider.notifier).add(CartItem(
+                        productId: product.id,
+                        bakerId: product.bakerId,
+                        title: product.name,
+                        unitPriceCents: price,
+                        imageUrl: product.imageUrls.isNotEmpty
+                            ? product.imageUrls.first
+                            : null,
+                        sizeId: effectiveSizeId,
+                        sizeLabel: product.sizes.isNotEmpty ? label : null,
+                      ));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('Added to cart.'),
+                    action: SnackBarAction(
+                      label: 'View cart',
+                      onPressed: () => context.pushNamed(AppRoutes.cartName),
+                    ),
+                  ));
                 },
                 icon: Icon(product.isCustomizable
                     ? Icons.request_quote_outlined
                     : Icons.add_shopping_cart_outlined),
-                label: Text(product.isCustomizable ? 'Request a quote' : 'Order now'),
+                label: Text(
+                    product.isCustomizable ? 'Request a quote' : 'Add to cart'),
               ),
             ),
           ],

@@ -54,6 +54,7 @@ class OrdersController extends AsyncNotifier<List<Order>> {
     String fulfillment = 'delivery',
     bool buyNow = false,
     String? sizeId,
+    List<Map<String, dynamic>>? items,
     double? lat,
     double? lng,
     Map<String, String> specs = const {},
@@ -66,6 +67,7 @@ class OrdersController extends AsyncNotifier<List<Order>> {
         'fulfillment': fulfillment,
         if (buyNow) 'buy_now': true,
         if (buyNow && sizeId != null) 'size_id': sizeId,
+        if (items != null && items.isNotEmpty) 'items': items,
         if (productId != null) 'product_id': productId,
         if (deliveryAddress != null && deliveryAddress.isNotEmpty)
           'delivery_address': deliveryAddress,

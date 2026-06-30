@@ -12,6 +12,7 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/press_scale.dart';
+import '../../cart/application/cart_controller.dart';
 import '../../favorites/application/favorites_controller.dart';
 import '../../home/widgets/category_chip.dart';
 import '../../home/widgets/product_card.dart';
@@ -92,6 +93,8 @@ class _CoverBar extends ConsumerWidget {
     final saved = ref.watch(favoriteBakersProvider).contains(baker.id);
     final myBakerId = ref.watch(onboardingControllerProvider).valueOrNull?.id;
     final isOwner = myBakerId != null && myBakerId == baker.id;
+    final cartCount =
+        ref.watch(cartProvider).fold<int>(0, (s, i) => s + i.qty);
     final hasCover =
         baker.coverImageUrl != null && baker.coverImageUrl!.isNotEmpty;
     return SliverAppBar(
@@ -101,6 +104,17 @@ class _CoverBar extends ConsumerWidget {
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
       actions: [
+        if (!isOwner)
+          IconButton(
+            tooltip: 'Cart',
+            icon: Badge(
+              isLabelVisible: cartCount > 0,
+              label: Text('$cartCount'),
+              child: const Icon(Icons.shopping_cart_outlined,
+                  color: Colors.white),
+            ),
+            onPressed: () => context.pushNamed(AppRoutes.cartName),
+          ),
         if (isOwner)
           IconButton(
             tooltip: 'Change cover',
@@ -351,6 +365,7 @@ class _Menu extends ConsumerStatefulWidget {
 class _MenuState extends ConsumerState<_Menu> {
   String? _categoryId; // null = all
   String _sort = 'top_rated';
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
@@ -389,13 +404,36 @@ class _MenuState extends ConsumerState<_Menu> {
             .toSet();
         final cats =
             categories.where((c) => present.contains(c.id)).toList();
-        final shown = _categoryId == null
-            ? all
-            : all.where((p) => p.categoryId == _categoryId).toList();
+        final q = _query.trim().toLowerCase();
+        final shown = all.where((p) {
+          if (_categoryId != null && p.categoryId != _categoryId) return false;
+          if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) return false;
+          return true;
+        }).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Insets.screenH, 0, Insets.screenH, Insets.sm),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search this bakery’s menu',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _query = ''),
+                        ),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(40)),
+                ),
+              ),
+            ),
             if (cats.length > 1)
               SizedBox(
                 height: 44,
