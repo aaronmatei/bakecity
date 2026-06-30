@@ -20,6 +20,8 @@ type Product struct {
 	DiscountPct  *int          `json:"discount_pct,omitempty"`
 	Dietary      []string      `json:"dietary,omitempty"`
 	IsCustom     bool          `json:"is_custom"`
+	// AllowCustomRequest lets a fixed product also offer a custom-version path.
+	AllowCustomRequest bool `json:"allow_custom_request"`
 	Subcategory  string        `json:"subcategory_slug,omitempty"`
 	CakeOccasion string        `json:"cake_occasion,omitempty"`
 	CakeFlavor   string        `json:"cake_flavor,omitempty"`
@@ -75,6 +77,7 @@ type CreateProductRequest struct {
 	LeadTimeDays *int        `json:"lead_time_days"`
 	Dietary      []string    `json:"dietary"`
 	IsCustom     bool        `json:"is_custom"`
+	AllowCustomRequest bool  `json:"allow_custom_request"`
 	IsOnOffer    bool        `json:"is_on_offer"`
 	DiscountPct  *int        `json:"discount_pct"`
 	CakeOccasion string      `json:"cake_occasion"`
@@ -97,6 +100,7 @@ type UpdateProductRequest struct {
 	Active       *bool        `json:"active"`
 	Dietary      *[]string    `json:"dietary"`
 	IsCustom     *bool        `json:"is_custom"`
+	AllowCustomRequest *bool  `json:"allow_custom_request"`
 	IsOnOffer    *bool        `json:"is_on_offer"`
 	DiscountPct  *int         `json:"discount_pct"`
 	CakeOccasion *string      `json:"cake_occasion"`

@@ -71,6 +71,7 @@ func (r *Repository) CreateCategory(ctx context.Context, name, slug string) (*Ca
 const productColumns = `id, baker_id, COALESCE(category_id::text, ''), title,
 	COALESCE(description, ''), base_price, lead_time_days, active,
 	rating_avg, rating_count, is_on_offer, discount_pct, dietary, is_custom,
+	allow_custom_request,
 	COALESCE(subcategory_slug, ''), COALESCE(cake_occasion, ''),
 	COALESCE(cake_flavor, ''), COALESCE(cake_format, ''), created_at, updated_at`
 
@@ -81,8 +82,8 @@ func scanProductCols(p *Product) []any {
 		&p.ID, &p.BakerID, &p.CategoryID, &p.Title, &p.Description,
 		&p.BasePrice, &p.LeadTimeDays, &p.Active,
 		&p.RatingAvg, &p.RatingCount, &p.IsOnOffer, &p.DiscountPct, &p.Dietary,
-		&p.IsCustom, &p.Subcategory, &p.CakeOccasion, &p.CakeFlavor, &p.CakeFormat,
-		&p.CreatedAt, &p.UpdatedAt,
+		&p.IsCustom, &p.AllowCustomRequest, &p.Subcategory, &p.CakeOccasion,
+		&p.CakeFlavor, &p.CakeFormat, &p.CreatedAt, &p.UpdatedAt,
 	}
 }
 
@@ -174,13 +175,14 @@ func (r *Repository) CreateProduct(ctx context.Context, bakerID string, req Crea
 	if err := tx.QueryRow(ctx,
 		`INSERT INTO products
 		  (baker_id, category_id, title, description, base_price, lead_time_days,
-		   dietary, is_custom, is_on_offer, discount_pct, cake_occasion, cake_flavor, cake_format)
+		   dietary, is_custom, is_on_offer, discount_pct, cake_occasion, cake_flavor, cake_format,
+		   allow_custom_request)
 		 VALUES ($1, NULLIF($2,'')::uuid, $3, NULLIF($4,''), $5, COALESCE($6,1),
-		   $7, $8, $9, $10, NULLIF($11,''), NULLIF($12,''), NULLIF($13,''))
+		   $7, $8, $9, $10, NULLIF($11,''), NULLIF($12,''), NULLIF($13,''), $14)
 		 RETURNING id`,
 		bakerID, req.CategoryID, req.Title, req.Description, req.BasePrice, req.LeadTimeDays,
 		dietary, req.IsCustom, req.IsOnOffer, req.DiscountPct,
-		req.CakeOccasion, req.CakeFlavor, req.CakeFormat,
+		req.CakeOccasion, req.CakeFlavor, req.CakeFormat, req.AllowCustomRequest,
 	).Scan(&id); err != nil {
 		return nil, err
 	}
@@ -333,11 +335,12 @@ func (r *Repository) UpdateProduct(ctx context.Context, id string, req UpdatePro
 		    cake_occasion  = COALESCE($12, cake_occasion),
 		    cake_flavor    = COALESCE($13, cake_flavor),
 		    cake_format    = COALESCE($14, cake_format),
+		    allow_custom_request = COALESCE($15, allow_custom_request),
 		    updated_at     = now()
 		  WHERE id = $1`,
 		id, req.CategoryID, req.Title, req.Description, req.BasePrice, req.LeadTimeDays, req.Active,
 		dietary, req.IsCustom, req.IsOnOffer, req.DiscountPct,
-		req.CakeOccasion, req.CakeFlavor, req.CakeFormat,
+		req.CakeOccasion, req.CakeFlavor, req.CakeFormat, req.AllowCustomRequest,
 	); err != nil {
 		return nil, err
 	}
