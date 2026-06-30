@@ -70,14 +70,22 @@ type ProductPerf struct {
 	Revenue    float64 `json:"revenue"`
 }
 
+// TrendPoint is net revenue for one calendar month (period = "YYYY-MM").
+type TrendPoint struct {
+	Period  string  `json:"period"`
+	Revenue float64 `json:"revenue"`
+}
+
 // BakerInsights summarizes a baker's order book: counts by status, completed
-// revenue (gross and net of commission), and the top products.
+// revenue (gross and net of commission), the top products, and a monthly net
+// revenue trend.
 type BakerInsights struct {
 	StatusCounts    map[string]int `json:"status_counts"`
 	CompletedOrders int            `json:"completed_orders"`
 	GrossRevenue    float64        `json:"gross_revenue"`
 	NetRevenue      float64        `json:"net_revenue"`
 	TopProducts     []ProductPerf  `json:"top_products"`
+	RevenueTrend    []TrendPoint   `json:"revenue_trend"`
 }
 
 // bakerScheduling holds the fields needed to validate fulfillment of an order.

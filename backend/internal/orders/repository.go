@@ -210,7 +210,11 @@ func (r *Repository) BakerInsights(ctx context.Context, bakerID string) (*BakerI
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	out := &BakerInsights{StatusCounts: map[string]int{}, TopProducts: []ProductPerf{}}
+	out := &BakerInsights{
+		StatusCounts: map[string]int{},
+		TopProducts:  []ProductPerf{},
+		RevenueTrend: []TrendPoint{},
+	}
 
 	rows, err := r.db.Query(ctx,
 		`SELECT status, COUNT(*) FROM orders WHERE baker_id = $1 GROUP BY status`, bakerID)
@@ -250,15 +254,44 @@ func (r *Repository) BakerInsights(ctx context.Context, bakerID string) (*BakerI
 	if err != nil {
 		return nil, err
 	}
-	defer prows.Close()
 	for prows.Next() {
 		var p ProductPerf
 		if err := prows.Scan(&p.ProductID, &p.Title, &p.OrderCount, &p.Revenue); err != nil {
+			prows.Close()
 			return nil, err
 		}
 		out.TopProducts = append(out.TopProducts, p)
 	}
-	return out, prows.Err()
+	prows.Close()
+	if err := prows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Net revenue per month for the last 6 months (zero-filled so the sparkline
+	// has a steady cadence).
+	trows, err := r.db.Query(ctx,
+		`SELECT to_char(m, 'YYYY-MM'),
+		        COALESCE(SUM(o.total_amount - o.commission_amount), 0)
+		   FROM generate_series(
+		            date_trunc('month', now()) - interval '5 months',
+		            date_trunc('month', now()),
+		            interval '1 month') AS m
+		   LEFT JOIN orders o
+		     ON date_trunc('month', o.created_at) = m
+		    AND o.baker_id = $1 AND o.status = 'COMPLETED'
+		  GROUP BY m ORDER BY m`, bakerID)
+	if err != nil {
+		return nil, err
+	}
+	defer trows.Close()
+	for trows.Next() {
+		var tp TrendPoint
+		if err := trows.Scan(&tp.Period, &tp.Revenue); err != nil {
+			return nil, err
+		}
+		out.RevenueTrend = append(out.RevenueTrend, tp)
+	}
+	return out, trows.Err()
 }
 
 // BakerScheduling returns the scheduling-relevant fields of a baker profile.
