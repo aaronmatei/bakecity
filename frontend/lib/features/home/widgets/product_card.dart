@@ -34,6 +34,7 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = product.imageUrls.isNotEmpty ? product.imageUrls.first : null;
+    final soldOut = !product.isAvailable;
     return PressScale(
       onTap: () => context.pushNamed(
         AppRoutes.productDetailName,
@@ -50,6 +51,18 @@ class ProductCard extends StatelessWidget {
                   tag: productHeroTag(product.id),
                   child: NetworkPhoto(url: image, aspectRatio: 4 / 3),
                 ),
+                // Sold-out scrim + badge dims the whole image.
+                if (soldOut)
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: Radii.cardBorder,
+                      child: Container(
+                        color: context.cs.surface.withValues(alpha: 0.62),
+                        alignment: Alignment.center,
+                        child: const _SoldOutBadge(),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   top: Insets.sm,
                   right: Insets.sm,
@@ -57,10 +70,10 @@ class ProductCard extends StatelessWidget {
                 ),
                 if (rank != null)
                   Positioned(top: Insets.sm, left: Insets.sm, child: _Rank(rank!))
-                else if (isNew)
+                else if (isNew && !soldOut)
                   const Positioned(
                       top: Insets.sm, left: Insets.sm, child: _Tag('New')),
-                if (discountPct != null)
+                if (discountPct != null && !soldOut)
                   Positioned(
                     bottom: Insets.sm,
                     left: Insets.sm,
@@ -77,7 +90,7 @@ class ProductCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              _leadLabel(product.leadTimeDays),
+              _secondaryLabel(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: context.tt.bodySmall
@@ -91,8 +104,40 @@ class ProductCard extends StatelessWidget {
     );
   }
 
+  /// Prefer an appetising description; fall back to the lead-time label. Kept to
+  /// one line so card height (and the home rails) stay constant.
+  String _secondaryLabel() {
+    final desc = product.description?.trim();
+    if (desc != null && desc.isNotEmpty) return desc;
+    return _leadLabel(product.leadTimeDays);
+  }
+
   static String _leadLabel(int days) =>
       days <= 1 ? 'Ready next day' : 'Ready in $days days';
+}
+
+class _SoldOutBadge extends StatelessWidget {
+  const _SoldOutBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: context.cs.surface,
+        borderRadius: BorderRadius.circular(Radii.chip),
+        boxShadow: context.bake.cardShadow,
+      ),
+      child: Text(
+        'Sold out',
+        style: context.tt.labelMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: context.cs.onSurface,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
 }
 
 class _PriceRow extends StatelessWidget {
