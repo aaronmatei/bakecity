@@ -368,7 +368,7 @@ func buildSimple(rng *rand.Rand, catSlug string) []seedProduct {
 		return nil
 	}
 	rng.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
-	take := 3 + rng.Intn(4)
+	take := 5 + rng.Intn(4) // 5–8 per category (more variety per baker)
 	if take > len(pool) {
 		take = len(pool)
 	}
@@ -400,7 +400,11 @@ func buildSimple(rng *rand.Rand, catSlug string) []seedProduct {
 			desc:         fmt.Sprintf("Freshly baked %s, made to order%s.", strings.ToLower(it.name), dietSuffix(diet)),
 			categorySlug: catSlug, basePrice: base, lead: it.lead, dietary: diet,
 			onOffer: onOffer, discountPct: disc,
-			ratingAvg: ratingFor(rng), ratingCount: 4 + rng.Intn(90),
+			// ~40% of simple items also open to a custom version, so even bakers
+			// without cakes (e.g. cookie/brownie shops) show the buy-now vs
+			// request-custom mix.
+			allowCustom: rng.Float64() < 0.4,
+			ratingAvg:   ratingFor(rng), ratingCount: 4 + rng.Intn(90),
 			sizes:  sizes,
 			images: []string{imageURL(imageKeywords[catSlug], slug, 0)},
 		})
