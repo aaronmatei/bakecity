@@ -11,6 +11,7 @@ class Product {
     this.imageMediaIds = const [],
     this.leadTimeDays = 1,
     this.isCustomizable = true,
+    this.allowCustomRequest = false,
     this.isAvailable = true,
     this.ratingAvg = 0,
     this.ratingCount = 0,
@@ -37,6 +38,9 @@ class Product {
   final List<String> imageMediaIds;
   final int leadTimeDays;
   final bool isCustomizable;
+
+  /// A fixed product can also offer a custom-version (quote) path.
+  final bool allowCustomRequest;
   final bool isAvailable;
 
   // Catalog enrichment.
@@ -81,6 +85,7 @@ class Product {
       isCustomizable: json['is_custom'] as bool? ??
           json['is_customizable'] as bool? ??
           true,
+      allowCustomRequest: json['allow_custom_request'] as bool? ?? false,
       isAvailable:
           json['active'] as bool? ?? json['is_available'] as bool? ?? true,
       ratingAvg: (json['rating_avg'] as num?)?.toDouble() ?? 0,

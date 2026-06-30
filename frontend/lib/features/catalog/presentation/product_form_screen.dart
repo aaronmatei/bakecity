@@ -68,6 +68,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late bool _available;
   late bool _isOnOffer;
   late bool _isCustom;
+  late bool _allowCustomRequest;
   String? _occasion;
   String? _flavor;
   String? _format;
@@ -93,6 +94,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _available = p?.isAvailable ?? true;
     _isOnOffer = p?.isOnOffer ?? false;
     _isCustom = p?.isCustomizable ?? false;
+    _allowCustomRequest = p?.allowCustomRequest ?? false;
     _occasion = p?.cakeOccasion;
     _flavor = p?.cakeFlavor;
     _format = p?.cakeFormat;
@@ -193,6 +195,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           sizes: sizes,
           imageMediaIds: _images.map((e) => e.mediaId).toList(),
           isCustom: _isCustom,
+          allowCustomRequest: _isCustom ? false : _allowCustomRequest,
         );
       } else {
         await ctrl.createProduct(
@@ -210,6 +213,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           sizes: sizes,
           imageMediaIds: _images.map((e) => e.mediaId).toList(),
           isCustom: _isCustom,
+          allowCustomRequest: _isCustom ? false : _allowCustomRequest,
         );
       }
       ref.invalidate(bakerManageProductsProvider(widget.bakerId));
@@ -322,6 +326,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   style: context.tt.bodySmall,
                 ),
               ),
+              if (!_isCustom)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _allowCustomRequest,
+                  onChanged: (v) =>
+                      setState(() => _allowCustomRequest = v),
+                  secondary: const Icon(Icons.auto_fix_high_outlined),
+                  title: const Text('Allow custom requests'),
+                  subtitle: Text(
+                    'Customers can also request a custom version — you\'ll quote it.',
+                    style: context.tt.bodySmall,
+                  ),
+                ),
 
               // Cake attributes.
               if (cakes) ...[

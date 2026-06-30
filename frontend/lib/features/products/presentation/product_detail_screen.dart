@@ -379,6 +379,7 @@ class _CtaBar extends ConsumerWidget {
             .firstWhere((s) => s.id == sizeId, orElse: () => product.sizes.first)
             .label
         : (product.isOnOffer ? 'Offer price' : 'From');
+    final allowCustom = !product.isCustomizable && product.allowCustomRequest;
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -388,7 +389,10 @@ class _CtaBar extends ConsumerWidget {
         top: false,
         minimum: const EdgeInsets.fromLTRB(
             Insets.screenH, Insets.md, Insets.screenH, Insets.md),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,6 +435,25 @@ class _CtaBar extends ConsumerWidget {
                 label: Text(product.isCustomizable ? 'Request a quote' : 'Order now'),
               ),
             ),
+          ],
+            ),
+            if (allowCustom) ...[
+              const SizedBox(height: Insets.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.pushNamed(
+                    AppRoutes.productOrderRequestName,
+                    pathParameters: {'productId': product.id},
+                    queryParameters: {
+                      if (product.sizes.isNotEmpty) 'size': label,
+                    },
+                  ),
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('Request a custom version'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
