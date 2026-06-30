@@ -85,8 +85,8 @@ class OrderDetailScreen extends ConsumerWidget {
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Chat'),
               Tab(text: 'Quotes'),
+              Tab(text: 'Chat'),
               Tab(text: 'Production'),
               Tab(text: 'Photos'),
               Tab(text: 'Delivery'),
@@ -97,8 +97,8 @@ class OrderDetailScreen extends ConsumerWidget {
         ),
         body: TabBarView(
           children: [
-            MessagingView(orderId: orderId),
             QuotesView(orderId: orderId),
+            MessagingView(orderId: orderId),
             ProductionView(orderId: orderId),
             OrderGalleryView(orderId: orderId),
             DeliveryView(orderId: orderId),
