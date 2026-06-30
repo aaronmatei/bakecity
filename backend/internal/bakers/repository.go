@@ -104,6 +104,17 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*BakerProfile, err
 	return scanProfile(r.db.QueryRow(ctx, `SELECT `+profileColumns+` FROM baker_profiles WHERE id = $1`, id))
 }
 
+// FollowerCount returns how many customers have favorited a bakery.
+func (r *Repository) FollowerCount(ctx context.Context, bakerID string) (int, error) {
+	if r.db == nil {
+		return 0, pkg.ErrNotImplemented
+	}
+	var n int
+	err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM favorite_bakers WHERE baker_id = $1`, bakerID).Scan(&n)
+	return n, err
+}
+
 // GetByUserID fetches the baker profile owned by a user (for the signed-in
 // baker's own onboarding/dashboard). Returns ErrNotFound if the user has no
 // profile yet.

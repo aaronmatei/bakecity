@@ -17,8 +17,11 @@ type BakerProfile struct {
 	DailyCapacity    int       `json:"daily_order_capacity"`
 	Lat              *float64  `json:"lat,omitempty"`
 	Lng              *float64  `json:"lng,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	// FollowerCount is how many customers have favorited this bakery (set on
+	// public profile reads).
+	FollowerCount int       `json:"follower_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // BlackoutDate maps to the baker_blackout_dates table.

@@ -37,9 +37,16 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateBakerRequ
 	return s.repo.Create(ctx, userID, req)
 }
 
-// Get returns a baker profile by id.
+// Get returns a baker profile by id, including its follower count.
 func (s *Service) Get(ctx context.Context, id string) (*BakerProfile, error) {
-	return s.repo.GetByID(ctx, id)
+	profile, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if n, err := s.repo.FollowerCount(ctx, id); err == nil {
+		profile.FollowerCount = n
+	}
+	return profile, nil
 }
 
 // GetByUser returns the baker profile owned by the authenticated user.
