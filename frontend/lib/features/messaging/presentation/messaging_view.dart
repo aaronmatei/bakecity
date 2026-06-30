@@ -135,18 +135,24 @@ class _MessagingViewState extends ConsumerState<MessagingView> {
     return widgets;
   }
 
-  /// Resolves who the current user is talking to. Customers see the baker's
-  /// business name; bakers see "Customer" (no customer-name lookup yet).
+  /// Resolves who the current user is talking to: customers see the bakery, and
+  /// bakers see the customer's name — both come straight off the order now.
   _Counterparty _counterparty(String? myId) {
     final order = ref.watch(orderDetailProvider(widget.orderId)).valueOrNull;
     if (order == null) return const _Counterparty('Conversation', '');
     final amCustomer = myId != null && order.customerId == myId;
     if (amCustomer) {
-      final baker =
-          ref.watch(bakerProfileProvider(order.bakerId)).valueOrNull;
-      return _Counterparty(baker?.businessName ?? 'Baker', 'Baker');
+      final bakerName = (order.bakerName?.isNotEmpty ?? false)
+          ? order.bakerName!
+          : (ref.watch(bakerProfileProvider(order.bakerId)).valueOrNull
+                  ?.businessName ??
+              'Baker');
+      return _Counterparty(bakerName, 'Baker');
     }
-    return const _Counterparty('Customer', 'Customer');
+    final customerName = (order.customerName?.isNotEmpty ?? false)
+        ? order.customerName!
+        : 'Customer';
+    return _Counterparty(customerName, 'Customer');
   }
 
   String _dayLabel(DateTime d) {
