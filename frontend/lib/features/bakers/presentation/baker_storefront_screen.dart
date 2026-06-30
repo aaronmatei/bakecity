@@ -9,6 +9,7 @@ import '../../../widgets/app_error_view.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_indicator.dart';
 import '../../../widgets/press_scale.dart';
+import '../../favorites/application/favorites_controller.dart';
 import '../../home/widgets/category_chip.dart';
 import '../../home/widgets/product_card.dart';
 import '../../products/application/products_controller.dart';
@@ -63,19 +64,29 @@ class BakerStorefrontScreen extends ConsumerWidget {
   }
 }
 
-class _CoverBar extends StatelessWidget {
+class _CoverBar extends ConsumerWidget {
   const _CoverBar({required this.baker});
   final MyBakerProfile baker;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.cs;
+    final saved = ref.watch(favoriteBakersProvider).contains(baker.id);
     return SliverAppBar(
       pinned: true,
       expandedHeight: 176,
       backgroundColor: cs.surface,
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          tooltip: saved ? 'Saved' : 'Save bakery',
+          icon: Icon(saved ? Icons.favorite : Icons.favorite_border,
+              color: Colors.white),
+          onPressed: () =>
+              ref.read(favoriteBakersProvider.notifier).toggle(baker.id),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 56, bottom: 14, right: 16),
         title: Text(

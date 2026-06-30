@@ -44,6 +44,8 @@ class ApiEndpoints {
   // ---- Favorites (wishlist) ----
   static const String favorites = '/favorites';
   static String favorite(String productId) => '/favorites/$productId';
+  static const String favoriteBakers = '/favorites/bakers';
+  static String favoriteBaker(String bakerId) => '/favorites/bakers/$bakerId';
 
   // ---- Orders ----
   static const String orders = '/orders';

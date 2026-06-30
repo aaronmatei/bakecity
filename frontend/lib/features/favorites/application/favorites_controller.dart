@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../services/api_client.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../bakers/application/baker_storefront_controller.dart';
+import '../../bakers/domain/my_baker_profile.dart';
 import '../../products/application/products_controller.dart';
 import '../../products/domain/product.dart';
 
@@ -29,6 +31,29 @@ final favoriteProductsProvider = FutureProvider<List<Product>>((ref) async {
     }
   }));
   return products.whereType<Product>().toList();
+});
+
+/// The signed-in user's favorited baker (bakery) ids — server-backed with an
+/// on-device cache, scoped to the auth user id.
+final favoriteBakersProvider =
+    StateNotifierProvider<FavoriteBakersController, Set<String>>((ref) {
+  final userId = ref.watch(authControllerProvider.select((s) => s.user?.id));
+  return FavoriteBakersController(ref, userId);
+});
+
+/// The favorited bakery profiles, loaded by id.
+final favoriteBakerProfilesProvider =
+    FutureProvider<List<MyBakerProfile>>((ref) async {
+  final ids = ref.watch(favoriteBakersProvider);
+  if (ids.isEmpty) return const [];
+  final results = await Future.wait(ids.map((id) async {
+    try {
+      return await ref.read(bakerProfileProvider(id).future);
+    } catch (_) {
+      return null;
+    }
+  }));
+  return results.whereType<MyBakerProfile>().toList();
 });
 
 class FavoritesController extends StateNotifier<Set<String>> {
@@ -79,6 +104,62 @@ class FavoritesController extends StateNotifier<Set<String>> {
         await api.put<dynamic>(ApiEndpoints.favorite(id));
       } else {
         await api.delete<dynamic>(ApiEndpoints.favorite(id));
+      }
+    } catch (_) {
+      // Offline: local cache holds; the next _init() reconciles with server.
+    }
+  }
+}
+
+/// Server-backed set of favorited baker ids (mirrors [FavoritesController] but
+/// for bakeries).
+class FavoriteBakersController extends StateNotifier<Set<String>> {
+  FavoriteBakersController(this._ref, this._userId) : super(const <String>{}) {
+    _init();
+  }
+
+  final Ref _ref;
+  final String? _userId;
+
+  String get _key => 'favorite_baker_ids_${_userId ?? 'anon'}';
+
+  Future<void> _init() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = (prefs.getStringList(_key) ?? const []).toSet();
+    if (_userId == null) return;
+    try {
+      final res = await _ref
+          .read(apiClientProvider)
+          .get<Map<String, dynamic>>(ApiEndpoints.favoriteBakers);
+      final ids =
+          ((res.data?['baker_ids'] ?? res.data?['data'] ?? const []) as List)
+              .map((e) => e.toString())
+              .toSet();
+      if (!mounted) return;
+      state = ids;
+      await prefs.setStringList(_key, ids.toList());
+    } catch (_) {
+      // Offline / error: cached set stays.
+    }
+  }
+
+  bool contains(String id) => state.contains(id);
+
+  Future<void> toggle(String id) async {
+    final adding = !state.contains(id);
+    final next = Set<String>.from(state);
+    adding ? next.add(id) : next.remove(id);
+    state = next;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, next.toList());
+    if (_userId == null) return;
+    try {
+      final api = _ref.read(apiClientProvider);
+      if (adding) {
+        await api.put<dynamic>(ApiEndpoints.favoriteBaker(id));
+      } else {
+        await api.delete<dynamic>(ApiEndpoints.favoriteBaker(id));
       }
     } catch (_) {
       // Offline: local cache holds; the next _init() reconciles with server.
