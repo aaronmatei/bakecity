@@ -28,7 +28,16 @@ func (s *Service) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Baker
 	if err := validateGeo(q.Lat, q.Lng); err != nil {
 		return nil, err
 	}
-	return s.repo.SearchBakers(ctx, q)
+	results, err := s.repo.SearchBakers(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	// Resolve cover image keys to viewable URLs (seeded covers are full URLs).
+	for i := range results {
+		results[i].CoverImageURL =
+			storage.ResolveURL(ctx, s.presigner, results[i].CoverImageURL, productImageTTL)
+	}
+	return results, nil
 }
 
 // SearchProducts validates and runs a product discovery query.

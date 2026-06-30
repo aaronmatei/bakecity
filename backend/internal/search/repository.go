@@ -47,7 +47,11 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 	sb.WriteString(`SELECT bp.id, bp.business_name, COALESCE(bp.bio, ''), bp.status,
 	    bp.lead_time_days, bp.delivery_radius_km,
 	    ST_Y(bp.location::geometry), ST_X(bp.location::geometry),
-	    COALESCE(rv.avg, 0), COALESCE(rv.cnt, 0), ` + distExpr + `
+	    COALESCE(rv.avg, 0), COALESCE(rv.cnt, 0), ` + distExpr + `,
+	    COALESCE((SELECT m.s3_key FROM media m
+	              WHERE m.owner_id = bp.user_id AND m.kind = 'baker_cover'
+	                AND m.order_id IS NULL
+	              ORDER BY m.created_at DESC LIMIT 1), '')
 	  FROM baker_profiles bp
 	  LEFT JOIN (
 	      SELECT baker_id, AVG(rating)::float8 AS avg, COUNT(*) AS cnt
@@ -91,7 +95,8 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 		var res BakerResult
 		if err := rows.Scan(&res.ID, &res.BusinessName, &res.Bio, &res.Status,
 			&res.LeadTimeDays, &res.DeliveryRadiusKM, &res.Lat, &res.Lng,
-			&res.AvgRating, &res.ReviewCount, &res.DistanceKM); err != nil {
+			&res.AvgRating, &res.ReviewCount, &res.DistanceKM,
+			&res.CoverImageURL); err != nil {
 			return nil, err
 		}
 		out = append(out, res)

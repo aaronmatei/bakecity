@@ -31,6 +31,7 @@ type BakerResult struct {
 	AvgRating        float64  `json:"avg_rating"`
 	ReviewCount      int      `json:"review_count"`
 	DistanceKM       *float64 `json:"distance_km,omitempty"`
+	CoverImageURL    string   `json:"cover_image_url,omitempty"`
 }
 
 // ProductSearchQuery holds discovery parameters for finding products. The
