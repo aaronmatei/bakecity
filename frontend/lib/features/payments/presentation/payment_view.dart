@@ -228,6 +228,31 @@ class _AmountsCard extends StatelessWidget {
                   ?.copyWith(color: cs.onSurfaceVariant),
             )
           else ...[
+            if (order.deliveryFeeCents > 0) ...[
+              _AmountRow(
+                label: 'Cake',
+                cents: (order.totalCents ?? 0) - order.deliveryFeeCents,
+              ),
+              _AmountRow(
+                label: 'Delivery (courier)',
+                cents: order.deliveryFeeCents,
+              ),
+              const Divider(height: Insets.lg),
+            ] else if (order.isPickup) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: Insets.sm),
+                child: Row(
+                  children: [
+                    Icon(Icons.storefront_outlined,
+                        size: 16, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Text('Pickup — no delivery fee',
+                        style: context.tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ],
             _AmountRow(label: 'Total', cents: order.totalCents),
             _AmountRow(
                 label: 'Deposit', cents: order.depositCents, paid: _depositPaid),
