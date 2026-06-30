@@ -12,6 +12,18 @@ import '../../../widgets/loading_indicator.dart';
 import '../application/insights_controller.dart';
 import '../domain/baker_insights.dart';
 
+const _monthAbbr = [
+  '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+/// "2026-06" → "Jun".
+String _monthLabel(String period) {
+  final parts = period.split('-');
+  final m = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+  return (m >= 1 && m <= 12) ? _monthAbbr[m] : '';
+}
+
 const _newStatuses = ['QUOTE_REQUESTED', 'NEGOTIATING', 'QUOTED'];
 const _activeStatuses = [
   'APPROVED',
@@ -164,6 +176,12 @@ class _RevenueCard extends StatelessWidget {
             style: context.tt.bodyMedium
                 ?.copyWith(color: cs.onPrimary.withValues(alpha: 0.9)),
           ),
+          if (insights.completedOrders > 0)
+            Text(
+              'Avg ${Formatters.currencyFromCents(insights.avgOrderValueCents)} per order',
+              style: context.tt.bodySmall
+                  ?.copyWith(color: cs.onPrimary.withValues(alpha: 0.85)),
+            ),
           if (insights.revenueTrendCents.where((v) => v > 0).isNotEmpty) ...[
             const SizedBox(height: Insets.lg),
             SizedBox(
@@ -175,6 +193,16 @@ class _RevenueCard extends StatelessWidget {
                   color: cs.onPrimary,
                 ),
               ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final p in insights.revenueTrendPeriods)
+                  Text(_monthLabel(p),
+                      style: context.tt.labelSmall?.copyWith(
+                          color: cs.onPrimary.withValues(alpha: 0.7))),
+              ],
             ),
             const SizedBox(height: Insets.xs),
             Text('Net revenue · last 6 months',

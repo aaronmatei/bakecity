@@ -33,6 +33,7 @@ class BakerInsights {
     required this.topProducts,
     this.followerCount = 0,
     this.revenueTrendCents = const [],
+    this.revenueTrendPeriods = const [],
   });
 
   final Map<String, int> statusCounts;
@@ -44,6 +45,13 @@ class BakerInsights {
 
   /// Net revenue per month (cents), oldest → newest, for the trend sparkline.
   final List<int> revenueTrendCents;
+
+  /// The "YYYY-MM" period for each trend point, parallel to [revenueTrendCents].
+  final List<String> revenueTrendPeriods;
+
+  /// Net revenue per completed order (cents).
+  int get avgOrderValueCents =>
+      completedOrders > 0 ? (netRevenueCents / completedOrders).round() : 0;
 
   factory BakerInsights.fromJson(Map<String, dynamic> json) {
     final counts = <String, int>{};
@@ -64,6 +72,9 @@ class BakerInsights {
       revenueTrendCents: ((json['revenue_trend'] as List?) ?? const [])
           .map((e) =>
               (((e['revenue'] as num?)?.toDouble() ?? 0) * 100).round())
+          .toList(),
+      revenueTrendPeriods: ((json['revenue_trend'] as List?) ?? const [])
+          .map((e) => (e['period'] ?? '').toString())
           .toList(),
     );
   }
