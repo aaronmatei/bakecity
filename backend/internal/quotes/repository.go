@@ -21,11 +21,11 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const quoteColumns = `id, order_id, version, amount, deposit_pct, valid_until, status, proposed_by, is_final, created_at`
+const quoteColumns = `id, order_id, version, amount, deposit_pct, delivery_fee, valid_until, status, proposed_by, is_final, created_at`
 
 func scanQuote(row pgx.Row) (*Quote, error) {
 	var q Quote
-	err := row.Scan(&q.ID, &q.OrderID, &q.Version, &q.Amount, &q.DepositPct,
+	err := row.Scan(&q.ID, &q.OrderID, &q.Version, &q.Amount, &q.DepositPct, &q.DeliveryFee,
 		&q.ValidUntil, &q.Status, &q.ProposedBy, &q.IsFinal, &q.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
@@ -38,7 +38,7 @@ func scanQuote(row pgx.Row) (*Quote, error) {
 
 // Create supersedes any pending quotes for the order, then inserts a new quote
 // at the next version, atomically. proposedBy is "baker" or "customer".
-func (r *Repository) Create(ctx context.Context, orderID string, amount, depositPct float64, validUntil *time.Time, proposedBy string, isFinal bool) (*Quote, error) {
+func (r *Repository) Create(ctx context.Context, orderID string, amount, depositPct, deliveryFee float64, validUntil *time.Time, proposedBy string, isFinal bool) (*Quote, error) {
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
@@ -58,10 +58,10 @@ func (r *Repository) Create(ctx context.Context, orderID string, amount, deposit
 	}
 
 	q, err := scanQuote(tx.QueryRow(ctx,
-		`INSERT INTO quotes (order_id, version, amount, deposit_pct, valid_until, status, proposed_by, is_final)
-		 VALUES ($1, (SELECT COALESCE(MAX(version), 0) + 1 FROM quotes WHERE order_id = $1), $2, $3, $4, $5, $6, $7)
+		`INSERT INTO quotes (order_id, version, amount, deposit_pct, delivery_fee, valid_until, status, proposed_by, is_final)
+		 VALUES ($1, (SELECT COALESCE(MAX(version), 0) + 1 FROM quotes WHERE order_id = $1), $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING `+quoteColumns,
-		orderID, amount, depositPct, validUntil, StatusPending, proposedBy, isFinal,
+		orderID, amount, depositPct, deliveryFee, validUntil, StatusPending, proposedBy, isFinal,
 	))
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (r *Repository) ListByOrder(ctx context.Context, orderID string) ([]Quote, 
 	out := make([]Quote, 0)
 	for rows.Next() {
 		var q Quote
-		if err := rows.Scan(&q.ID, &q.OrderID, &q.Version, &q.Amount, &q.DepositPct,
+		if err := rows.Scan(&q.ID, &q.OrderID, &q.Version, &q.Amount, &q.DepositPct, &q.DeliveryFee,
 			&q.ValidUntil, &q.Status, &q.ProposedBy, &q.IsFinal, &q.CreatedAt); err != nil {
 			return nil, err
 		}

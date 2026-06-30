@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/corebalt/bakecity/internal/ledger"
@@ -68,11 +69,16 @@ func (s *Service) Create(ctx context.Context, customerID string, req CreateOrder
 	for _, in := range req.Specs {
 		specs = append(specs, OrderSpec{Key: in.Key, Value: in.Value})
 	}
+	fulfillment := strings.ToLower(strings.TrimSpace(req.Fulfillment))
+	if fulfillment != "pickup" {
+		fulfillment = "delivery"
+	}
 	o := &Order{
 		CustomerID:      customerID,
 		BakerID:         req.BakerID,
 		ProductID:       req.ProductID,
 		DeliveryAddress: req.DeliveryAddress,
+		FulfillmentType: fulfillment,
 		Status:          StatusQuoteRequested,
 	}
 	return s.repo.Create(ctx, o, eventDate, req.Lat, req.Lng, specs)
@@ -297,8 +303,11 @@ func (s *Service) OnCustomerOffer(ctx context.Context, orderID string) error {
 }
 
 // OnQuoteAccepted re-validates fulfillment, records the financial breakdown, and
-// transitions the order to APPROVED. depositPct is a percentage (0-100).
-func (s *Service) OnQuoteAccepted(ctx context.Context, orderID string, total, depositPct float64) (*Order, error) {
+// transitions the order to APPROVED. cakeAmount is the bake price (commissioned);
+// deliveryFee is the baker's courier charge, applied only to delivery orders and
+// added to the balance — it is pass-through and not commissioned. depositPct is a
+// percentage (0-100) of the cake price.
+func (s *Service) OnQuoteAccepted(ctx context.Context, orderID string, cakeAmount, deliveryFee, depositPct float64) (*Order, error) {
 	o, err := s.repo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
@@ -315,13 +324,20 @@ func (s *Service) OnQuoteAccepted(ctx context.Context, orderID string, total, de
 			return nil, err
 		}
 	}
-	deposit := round2(total * depositPct / 100)
-	commission := round2(total * CommissionRate)
+	// Pickup orders incur no courier charge.
+	effectiveDelivery := 0.0
+	if o.FulfillmentType == "delivery" {
+		effectiveDelivery = round2(deliveryFee)
+	}
+	total := round2(cakeAmount + effectiveDelivery)
+	deposit := round2(cakeAmount * depositPct / 100)
+	commission := round2(cakeAmount * CommissionRate)
 	balance := round2(total - deposit)
-	if err := s.repo.SetAmountsAndStatus(ctx, orderID, total, deposit, balance, commission, StatusApproved); err != nil {
+	if err := s.repo.SetAmountsAndStatus(ctx, orderID, total, deposit, balance, commission, effectiveDelivery, StatusApproved); err != nil {
 		return nil, err
 	}
-	o.TotalAmount, o.DepositAmount, o.BalanceAmount, o.CommissionAmount = total, deposit, balance, commission
+	o.TotalAmount, o.DepositAmount, o.BalanceAmount = total, deposit, balance
+	o.CommissionAmount, o.DeliveryFee = commission, effectiveDelivery
 	o.Status = StatusApproved
 	return o, nil
 }

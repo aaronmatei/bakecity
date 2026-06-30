@@ -57,7 +57,7 @@ func (s *Service) Propose(ctx context.Context, actor Actor, orderID string, req 
 	if err := s.orders.OnQuoteProposed(ctx, orderID); err != nil {
 		return nil, err
 	}
-	q, err := s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, validUntil, ProposedByBaker, req.IsFinal)
+	q, err := s.repo.Create(ctx, orderID, req.Amount, req.DepositPct, req.DeliveryFee, validUntil, ProposedByBaker, req.IsFinal)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (s *Service) SuggestOffer(ctx context.Context, actor Actor, orderID string,
 	}
 	// A suggestion carries no deposit terms and never expires; the baker sets
 	// those when they respond with a quote.
-	q, err := s.repo.Create(ctx, orderID, req.Amount, 0, nil, ProposedByCustomer, false)
+	q, err := s.repo.Create(ctx, orderID, req.Amount, 0, 0, nil, ProposedByCustomer, false)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s *Service) Accept(ctx context.Context, actor Actor, orderID, quoteID stri
 		return nil, nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "quote has expired")
 	}
 
-	updated, err := s.orders.OnQuoteAccepted(ctx, orderID, q.Amount, q.DepositPct)
+	updated, err := s.orders.OnQuoteAccepted(ctx, orderID, q.Amount, q.DeliveryFee, q.DepositPct)
 	if err != nil {
 		return nil, nil, err
 	}

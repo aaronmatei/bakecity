@@ -16,6 +16,9 @@ type Order struct {
 	DepositAmount    float64     `json:"deposit_amount"`
 	BalanceAmount    float64     `json:"balance_amount"`
 	CommissionAmount float64     `json:"commission_amount"`
+	// FulfillmentType is "delivery" (courier) or "pickup" (customer collects).
+	FulfillmentType string  `json:"fulfillment_type"`
+	DeliveryFee     float64 `json:"delivery_fee"`
 	// Counterparty display names (populated on list/detail reads): the customer's
 	// personal name and the bakery's business name.
 	CustomerName string      `json:"customer_name,omitempty"`
@@ -38,6 +41,7 @@ type CreateOrderRequest struct {
 	ProductID       string      `json:"product_id"`
 	EventDate       string      `json:"event_date" binding:"required"` // YYYY-MM-DD
 	DeliveryAddress string      `json:"delivery_address"`
+	Fulfillment     string      `json:"fulfillment"` // "delivery" (default) or "pickup"
 	Lat             *float64    `json:"lat"`
 	Lng             *float64    `json:"lng"`
 	Specs           []SpecInput `json:"specs"`

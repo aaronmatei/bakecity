@@ -24,7 +24,8 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 
 const orderColumns = `id, order_number, customer_id, baker_id, COALESCE(product_id::text, ''), status,
 	event_date, COALESCE(delivery_address, ''),
-	total_amount, deposit_amount, balance_amount, commission_amount, created_at`
+	total_amount, deposit_amount, balance_amount, commission_amount,
+	COALESCE(fulfillment_type, 'delivery'), delivery_fee, created_at`
 
 // nameExprs appends the counterparty display names (customer's name, bakery's
 // business name) for list/detail reads. Leading comma so it follows orderColumns.
@@ -36,7 +37,7 @@ func scanOrder(row pgx.Row) (*Order, error) {
 	var o Order
 	err := row.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 		&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
-		&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt)
+		&o.BalanceAmount, &o.CommissionAmount, &o.FulfillmentType, &o.DeliveryFee, &o.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -59,14 +60,17 @@ func (r *Repository) Create(ctx context.Context, o *Order, eventDate time.Time, 
 
 	created, err := scanOrder(tx.QueryRow(ctx,
 		`INSERT INTO orders
-		    (customer_id, baker_id, product_id, status, event_date, delivery_address, delivery_location)
+		    (customer_id, baker_id, product_id, status, event_date, delivery_address,
+		     fulfillment_type, delivery_location)
 		 VALUES (
 		    $1, $2, NULLIF($3, '')::uuid, $4, $5, NULLIF($6, ''),
+		    COALESCE(NULLIF($9, ''), 'delivery'),
 		    CASE WHEN $7::float8 IS NOT NULL AND $8::float8 IS NOT NULL
 		         THEN ST_SetSRID(ST_MakePoint($8, $7), 4326)::geography END
 		 )
 		 RETURNING `+orderColumns,
 		o.CustomerID, o.BakerID, o.ProductID, o.Status, eventDate, o.DeliveryAddress, lat, lng,
+		o.FulfillmentType,
 	))
 	if err != nil {
 		return nil, err
@@ -96,7 +100,8 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Order, error) {
 	err := r.db.QueryRow(ctx, `SELECT `+orderColumns+nameExprs+` FROM orders WHERE id = $1`, id).
 		Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
-			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt, &o.CustomerName, &o.BakerName)
+			&o.BalanceAmount, &o.CommissionAmount, &o.FulfillmentType, &o.DeliveryFee,
+			&o.CreatedAt, &o.CustomerName, &o.BakerName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -173,8 +178,8 @@ func (r *Repository) List(ctx context.Context, userID, bakerID string, f ListFil
 		var o Order
 		if err := rows.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
-			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt,
-			&o.CustomerName, &o.BakerName); err != nil {
+			&o.BalanceAmount, &o.CommissionAmount, &o.FulfillmentType, &o.DeliveryFee,
+			&o.CreatedAt, &o.CustomerName, &o.BakerName); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
@@ -351,16 +356,16 @@ func (r *Repository) CountOrdersOn(ctx context.Context, bakerID string, date tim
 
 // SetAmountsAndStatus records the financial breakdown and transitions an order's
 // status in a single update.
-func (r *Repository) SetAmountsAndStatus(ctx context.Context, id string, total, deposit, balance, commission float64, status string) error {
+func (r *Repository) SetAmountsAndStatus(ctx context.Context, id string, total, deposit, balance, commission, deliveryFee float64, status string) error {
 	if r.db == nil {
 		return pkg.ErrNotImplemented
 	}
 	_, err := r.db.Exec(ctx,
 		`UPDATE orders
 		    SET total_amount = $2, deposit_amount = $3, balance_amount = $4,
-		        commission_amount = $5, status = $6, updated_at = now()
+		        commission_amount = $5, delivery_fee = $6, status = $7, updated_at = now()
 		  WHERE id = $1`,
-		id, total, deposit, balance, commission, status,
+		id, total, deposit, balance, commission, deliveryFee, status,
 	)
 	return err
 }
