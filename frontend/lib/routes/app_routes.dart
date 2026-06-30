@@ -4,6 +4,7 @@ class AppRoutes {
 
   // Top-level paths.
   static const String splash = '/';
+  static const String welcome = '/welcome';
   static const String login = '/login';
   static const String register = '/register';
   static const String onboarding = '/onboarding';
@@ -33,6 +34,7 @@ class AppRoutes {
 
   // Route names (for `goNamed`).
   static const String splashName = 'splash';
+  static const String welcomeName = 'welcome';
   static const String loginName = 'login';
   static const String registerName = 'register';
   static const String onboardingName = 'onboarding';

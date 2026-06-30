@@ -8,6 +8,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/admin/presentation/admin_dashboard_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/auth/presentation/welcome_screen.dart';
 import '../features/bakers/presentation/baker_storefront_screen.dart';
 import '../features/baker/presentation/baker_home_screen.dart';
 import '../features/customer/presentation/customer_home_screen.dart';
@@ -54,7 +55,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
       final location = state.matchedLocation;
-      final isAuthRoute = location == AppRoutes.login ||
+      final isAuthRoute = location == AppRoutes.welcome ||
+          location == AppRoutes.login ||
           location == AppRoutes.register;
       final isSplash = location == AppRoutes.splash;
 
@@ -63,7 +65,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // Stay on splash while the session is being restored.
           return isSplash ? null : AppRoutes.splash;
         case AuthStatus.unauthenticated:
-          return isAuthRoute ? null : AppRoutes.login;
+          // Land unauthenticated users on the welcome screen; login/register
+          // are reachable from there.
+          return isAuthRoute ? null : AppRoutes.welcome;
         case AuthStatus.authenticated:
           if (isAuthRoute || isSplash) {
             return _homeFor(auth);
@@ -78,6 +82,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
+        path: AppRoutes.welcome,
+        name: AppRoutes.welcomeName,
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.login,
         name: AppRoutes.loginName,
         builder: (context, state) => const LoginScreen(),
@@ -85,7 +94,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.register,
         name: AppRoutes.registerName,
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) => RegisterScreen(
+          initialRole: state.uri.queryParameters['role'] == UserRole.baker.name
+              ? UserRole.baker
+              : UserRole.customer,
+        ),
       ),
       GoRoute(
         path: AppRoutes.onboarding,

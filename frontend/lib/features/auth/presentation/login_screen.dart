@@ -43,12 +43,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _showForgotPassword() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset your password'),
+        content: const Text(
+          'Self-service password reset isn\'t available yet. Reach out to '
+          'BakeCity support and we\'ll help you back into your account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(
+        leading: BackButton(
+          onPressed: () => context.goNamed(AppRoutes.welcomeName),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -104,7 +128,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       validator: Validators.password,
                       onFieldSubmitted: (_) => _submit(),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _showForgotPassword,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     PrimaryButton(
                       label: 'Log in',
                       isLoading: state.isBusy,

@@ -9,7 +9,11 @@ import '../../../widgets/primary_button.dart';
 import '../application/auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.initialRole = UserRole.customer});
+
+  /// Role preselected on the role toggle — set to [UserRole.baker] when the
+  /// user arrives via the "I bake" path on the welcome screen.
+  final UserRole initialRole;
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -23,7 +27,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _bakeryNameController = TextEditingController();
-  UserRole _role = UserRole.customer;
+  late UserRole _role = widget.initialRole;
 
   bool get _isBaker => _role == UserRole.baker;
 
@@ -64,7 +68,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final state = ref.watch(authControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
+      appBar: AppBar(
+        title: const Text('Create account'),
+        leading: BackButton(
+          onPressed: () => context.goNamed(AppRoutes.welcomeName),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
