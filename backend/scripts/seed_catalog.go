@@ -168,7 +168,7 @@ type seedProduct struct {
 	basePrice                          float64
 	lead                               int
 	dietary                            []string
-	isCustom, onOffer                  bool
+	isCustom, onOffer, allowCustom     bool
 	discountPct                        int
 	ratingAvg                          float64
 	ratingCount                        int
@@ -353,7 +353,9 @@ func makeCake(rng *rand.Rand, occ, fl, fmt_, slug string) seedProduct {
 		categorySlug: "cakes", subcategory: fl,
 		basePrice: base, lead: lead, dietary: diet,
 		onOffer: onOffer, discountPct: disc,
-		ratingAvg: ratingFor(rng), ratingCount: 5 + rng.Intn(120),
+		// Standard cakes are bought as-is, but also open to a custom version.
+		allowCustom: true,
+		ratingAvg:   ratingFor(rng), ratingCount: 5 + rng.Intn(120),
 		occasion: occ, flavor: fl, format: fmt_,
 		sizes:  sizes,
 		images: []string{imageURL(imageKeywords["cakes"], slug, 0), imageURL(fl+",cake", slug, 1)},
@@ -532,17 +534,17 @@ func upsertProduct(ctx context.Context, db *pgxpool.Pool, b bakerRow, p seedProd
 		`INSERT INTO products
 		  (baker_id, slug, category_id, title, description, base_price, lead_time_days, active,
 		   subcategory_slug, dietary, is_custom, is_on_offer, discount_pct, rating_avg, rating_count,
-		   cake_occasion, cake_flavor, cake_format)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+		   cake_occasion, cake_flavor, cake_format, allow_custom_request)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		 ON CONFLICT (baker_id, slug) DO UPDATE SET
 		   category_id=$3, title=$4, description=$5, base_price=$6, lead_time_days=$7, active=true,
 		   subcategory_slug=$8, dietary=$9, is_custom=$10, is_on_offer=$11, discount_pct=$12,
 		   rating_avg=$13, rating_count=$14, cake_occasion=$15, cake_flavor=$16, cake_format=$17,
-		   updated_at=now()
+		   allow_custom_request=$18, updated_at=now()
 		 RETURNING id`,
 		b.id, p.slug, nilable, p.title, p.desc, p.basePrice, p.lead,
 		sub, diet, p.isCustom, p.onOffer, disc, p.ratingAvg, p.ratingCount,
-		occ, flv, fmt_,
+		occ, flv, fmt_, p.allowCustom,
 	).Scan(&pid)
 	if err != nil {
 		log.Fatalf("upsert product %s/%s: %v", b.name, p.slug, err)
