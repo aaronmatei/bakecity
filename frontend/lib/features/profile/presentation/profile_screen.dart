@@ -2,14 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/errors/app_exception.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../routes/app_routes.dart';
+import '../../../services/upload_service.dart';
 import '../../../widgets/press_scale.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../bakers/application/baker_storefront_controller.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
+
+  /// Picks + uploads a baker cover/logo, then refreshes the storefront profile.
+  Future<void> _uploadBakerMedia(
+    BuildContext context,
+    WidgetRef ref, {
+    required String kind,
+    required String okMessage,
+    String? bakerId,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id =
+          await ref.read(uploadServiceProvider).pickAndUpload(kind: kind);
+      if (id != null) {
+        if (bakerId != null) ref.invalidate(bakerProfileProvider(bakerId));
+        messenger.showSnackBar(SnackBar(content: Text(okMessage)));
+      }
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,6 +142,28 @@ class ProfileScreen extends ConsumerWidget {
                     pathParameters: {'bakerId': myBakerId},
                   ),
                 ),
+              _SettingsTile(
+                icon: Icons.image_outlined,
+                label: 'Change cover photo',
+                onTap: () => _uploadBakerMedia(
+                  context,
+                  ref,
+                  kind: MediaKind.bakerCover,
+                  okMessage: 'Cover updated.',
+                  bakerId: myBakerId,
+                ),
+              ),
+              _SettingsTile(
+                icon: Icons.account_circle_outlined,
+                label: 'Change logo',
+                onTap: () => _uploadBakerMedia(
+                  context,
+                  ref,
+                  kind: MediaKind.bakerAvatar,
+                  okMessage: 'Logo updated.',
+                  bakerId: myBakerId,
+                ),
+              ),
               _SettingsTile(
                 icon: Icons.insights_outlined,
                 label: 'Insights',
