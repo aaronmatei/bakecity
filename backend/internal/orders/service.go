@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -73,10 +74,58 @@ func (s *Service) Create(ctx context.Context, customerID string, req CreateOrder
 	if fulfillment != "pickup" {
 		fulfillment = "delivery"
 	}
+
+	// Cart checkout: price each fixed line, append it as a spec, and sum to the
+	// order total (paid in full upfront, like a single buy-now).
+	cart := len(req.Items) > 0
+	productID := req.ProductID
+	var cartTotal float64
+	if cart {
+		productID = ""
+		for _, it := range req.Items {
+			info, perr := s.repo.ProductPricing(ctx, it.ProductID, it.SizeID)
+			if perr != nil {
+				return nil, perr
+			}
+			if info.IsCustom {
+				return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "cart is for fixed products only")
+			}
+			if info.BakerID != req.BakerID {
+				return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "all cart items must be from the same baker")
+			}
+			price := info.Price
+			if info.OnOffer && info.DiscountPct > 0 {
+				price = price * float64(100-info.DiscountPct) / 100
+			}
+			price = round2(price)
+			if price <= 0 {
+				return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "a cart item has no price")
+			}
+			qty := it.Qty
+			if qty < 1 {
+				qty = 1
+			}
+			if productID == "" {
+				productID = it.ProductID
+			}
+			label := info.Title
+			if info.SizeLabel != "" {
+				label = info.Title + " (" + info.SizeLabel + ")"
+			}
+			line := round2(price * float64(qty))
+			cartTotal += line
+			specs = append(specs, OrderSpec{Key: label, Value: fmt.Sprintf("×%d — KES %.0f", qty, line)})
+		}
+		cartTotal = round2(cartTotal)
+		if cartTotal <= 0 {
+			return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "cart is empty")
+		}
+	}
+
 	o := &Order{
 		CustomerID:      customerID,
 		BakerID:         req.BakerID,
-		ProductID:       req.ProductID,
+		ProductID:       productID,
 		DeliveryAddress: req.DeliveryAddress,
 		FulfillmentType: fulfillment,
 		Status:          StatusQuoteRequested,
@@ -86,9 +135,17 @@ func (s *Service) Create(ctx context.Context, customerID string, req CreateOrder
 		return nil, err
 	}
 
-	// Buy-now: a fixed product is priced and approved immediately (full payment
-	// upfront), skipping the quote.
-	if req.BuyNow {
+	// Cart and single buy-now both produce a priced, approved order paid in full
+	// upfront (no quote).
+	if cart {
+		commission := round2(cartTotal * CommissionRate)
+		if err := s.repo.SetAmountsAndStatus(ctx, created.ID, cartTotal, cartTotal, 0, commission, 0, StatusApproved); err != nil {
+			return nil, err
+		}
+		created.TotalAmount, created.DepositAmount, created.BalanceAmount = cartTotal, cartTotal, 0
+		created.CommissionAmount, created.Status = commission, StatusApproved
+		created.Specs = specs
+	} else if req.BuyNow {
 		price, perr := s.priceForBuyNow(ctx, req.ProductID, req.SizeID)
 		if perr != nil {
 			return nil, perr
@@ -110,10 +167,11 @@ func (s *Service) priceForBuyNow(ctx context.Context, productID, sizeID string) 
 	if productID == "" {
 		return 0, pkg.NewAPIError(http.StatusBadRequest, pkg.ErrCodeValidation, "buy_now requires a product")
 	}
-	price, isCustom, onOffer, discountPct, err := s.repo.ProductPricing(ctx, productID, sizeID)
+	info, err := s.repo.ProductPricing(ctx, productID, sizeID)
 	if err != nil {
 		return 0, err
 	}
+	price, isCustom, onOffer, discountPct := info.Price, info.IsCustom, info.OnOffer, info.DiscountPct
 	if isCustom {
 		return 0, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "this product is made to order — request a quote instead")
 	}

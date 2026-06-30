@@ -50,6 +50,16 @@ type CreateOrderRequest struct {
 	// upfront). SizeID picks a specific size's price when set.
 	BuyNow bool   `json:"buy_now"`
 	SizeID string `json:"size_id"`
+	// Items, when present, is a cart checkout: several fixed products (all from
+	// the same baker) become one priced, approved order (full payment upfront).
+	Items []OrderItemInput `json:"items"`
+}
+
+// OrderItemInput is one line of a cart checkout.
+type OrderItemInput struct {
+	ProductID string `json:"product_id"`
+	SizeID    string `json:"size_id"`
+	Qty       int    `json:"qty"`
 }
 
 // SpecInput is a single order spec attribute in a CreateOrderRequest.

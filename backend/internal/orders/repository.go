@@ -196,36 +196,51 @@ func (r *Repository) UpdateStatus(ctx context.Context, id, status string) error 
 	return err
 }
 
-// ProductPricing returns a product's list price and whether it's made-to-order.
-// When sizeID is set and belongs to the product, that size's price is used.
-func (r *Repository) ProductPricing(ctx context.Context, productID, sizeID string) (price float64, isCustom, onOffer bool, discountPct int, err error) {
+// ProductInfo is the pricing/identity of a product (optionally a chosen size),
+// used by buy-now and cart checkout.
+type ProductInfo struct {
+	Price       float64
+	IsCustom    bool
+	OnOffer     bool
+	DiscountPct int
+	BakerID     string
+	Title       string
+	SizeLabel   string
+}
+
+// ProductPricing returns a product's list price/identity. When sizeID is set and
+// belongs to the product, that size's price/label is used.
+func (r *Repository) ProductPricing(ctx context.Context, productID, sizeID string) (ProductInfo, error) {
 	if r.db == nil {
-		return 0, false, false, 0, pkg.ErrNotImplemented
+		return ProductInfo{}, pkg.ErrNotImplemented
 	}
+	var info ProductInfo
 	var dp *int
-	err = r.db.QueryRow(ctx,
-		`SELECT base_price, is_custom, is_on_offer, discount_pct FROM products WHERE id = $1`,
+	err := r.db.QueryRow(ctx,
+		`SELECT base_price, is_custom, is_on_offer, discount_pct, baker_id, title FROM products WHERE id = $1`,
 		productID,
-	).Scan(&price, &isCustom, &onOffer, &dp)
+	).Scan(&info.Price, &info.IsCustom, &info.OnOffer, &dp, &info.BakerID, &info.Title)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, false, 0, pkg.ErrNotFound
+		return ProductInfo{}, pkg.ErrNotFound
 	}
 	if err != nil {
-		return 0, false, false, 0, err
+		return ProductInfo{}, err
 	}
 	if dp != nil {
-		discountPct = *dp
+		info.DiscountPct = *dp
 	}
 	if sizeID != "" {
 		var sp float64
+		var lbl string
 		if e := r.db.QueryRow(ctx,
-			`SELECT price FROM product_sizes WHERE id = $1 AND product_id = $2`,
+			`SELECT price, label FROM product_sizes WHERE id = $1 AND product_id = $2`,
 			sizeID, productID,
-		).Scan(&sp); e == nil {
-			price = sp
+		).Scan(&sp, &lbl); e == nil {
+			info.Price = sp
+			info.SizeLabel = lbl
 		}
 	}
-	return price, isCustom, onOffer, discountPct, nil
+	return info, nil
 }
 
 // BakerIDForUser resolves the baker_profiles.id owned by userID, or "" if none.
