@@ -11,6 +11,7 @@ const (
 	KindDeliveryProof = "delivery_proof" // proof-of-delivery photo
 	KindProduct       = "product"        // catalog product image
 	KindBakerCover    = "baker_cover"    // baker storefront cover image (owner-scoped)
+	KindBakerAvatar   = "baker_avatar"   // baker logo/avatar (owner-scoped)
 	KindKYC           = "kyc"            // baker's identity document (owner-scoped)
 )
 

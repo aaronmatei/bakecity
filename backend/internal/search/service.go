@@ -32,10 +32,12 @@ func (s *Service) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Baker
 	if err != nil {
 		return nil, err
 	}
-	// Resolve cover image keys to viewable URLs (seeded covers are full URLs).
+	// Resolve cover/avatar keys to viewable URLs (seeded ones are full URLs).
 	for i := range results {
 		results[i].CoverImageURL =
 			storage.ResolveURL(ctx, s.presigner, results[i].CoverImageURL, productImageTTL)
+		results[i].AvatarURL =
+			storage.ResolveURL(ctx, s.presigner, results[i].AvatarURL, productImageTTL)
 	}
 	return results, nil
 }

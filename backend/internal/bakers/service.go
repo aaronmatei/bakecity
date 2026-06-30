@@ -50,6 +50,9 @@ func (s *Service) Get(ctx context.Context, id string) (*BakerProfile, error) {
 	if covers, err := s.media.ListByOwnerKind(ctx, profile.UserID, media.KindBakerCover); err == nil && len(covers) > 0 {
 		profile.CoverImageURL = covers[0].URL
 	}
+	if avatars, err := s.media.ListByOwnerKind(ctx, profile.UserID, media.KindBakerAvatar); err == nil && len(avatars) > 0 {
+		profile.AvatarURL = avatars[0].URL
+	}
 	return profile, nil
 }
 

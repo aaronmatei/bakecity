@@ -24,6 +24,7 @@ var allowedKinds = map[string]bool{
 	KindDeliveryProof: true,
 	KindProduct:       true,
 	KindBakerCover:    true,
+	KindBakerAvatar:   true,
 	KindKYC:           true,
 }
 

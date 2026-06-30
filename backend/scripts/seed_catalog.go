@@ -206,18 +206,29 @@ func coverURL(bakerID string) string {
 	return fmt.Sprintf("https://loremflickr.com/1200/600/bakery,cake,pastry?lock=%d", int(hashSeed(bakerID))%100000)
 }
 
-// seedBakerCover gives a baker a storefront display picture (kind=baker_cover,
-// owner-scoped media with a full URL). Idempotent: only inserts if missing.
-func seedBakerCover(ctx context.Context, db *pgxpool.Pool, b bakerRow) {
-	if _, err := db.Exec(ctx,
-		`INSERT INTO media (owner_id, kind, s3_key, status)
-		 SELECT $1, 'baker_cover', $2, 'uploaded'
-		 WHERE NOT EXISTS (
-		   SELECT 1 FROM media WHERE owner_id = $1 AND kind = 'baker_cover' AND order_id IS NULL
-		 )`,
-		b.userID, coverURL(b.id)); err != nil {
-		log.Printf("seed cover for %s: %v", b.name, err)
+// avatarURL is a square logo/avatar photo, deterministic per baker.
+func avatarURL(bakerID string) string {
+	return fmt.Sprintf("https://loremflickr.com/300/300/bakery,logo,cake?lock=%d", int(hashSeed(bakerID))%100000+7)
+}
+
+// seedBakerMedia gives a baker a storefront cover + avatar (owner-scoped media
+// with full URLs). Idempotent: only inserts a kind if it's missing.
+func seedBakerMedia(ctx context.Context, db *pgxpool.Pool, b bakerRow) {
+	// kind is an internal constant, inlined as a literal so Postgres can deduce
+	// the parameter types cleanly (only $1=owner_id, $2=url are bound).
+	insert := func(kind, url string) {
+		if _, err := db.Exec(ctx, fmt.Sprintf(
+			`INSERT INTO media (owner_id, kind, s3_key, status)
+			 SELECT $1, '%[1]s', $2, 'uploaded'
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM media WHERE owner_id = $1 AND kind = '%[1]s' AND order_id IS NULL
+			 )`, kind),
+			b.userID, url); err != nil {
+			log.Printf("seed %s for %s: %v", kind, b.name, err)
+		}
 	}
+	insert("baker_cover", coverURL(b.id))
+	insert("baker_avatar", avatarURL(b.id))
 }
 
 // ---- Catalog generation ------------------------------------------------------
@@ -444,7 +455,7 @@ func main() {
 	total := 0
 	for i, b := range bakers {
 		spec := specialties[i%len(specialties)]
-		seedBakerCover(ctx, db, b)
+		seedBakerMedia(ctx, db, b)
 		rng := rand.New(rand.NewSource(hashSeed(b.id)))
 		for _, p := range buildCatalog(rng, spec) {
 			upsertProduct(ctx, db, b, p, catID)

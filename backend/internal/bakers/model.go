@@ -20,9 +20,10 @@ type BakerProfile struct {
 	// FollowerCount is how many customers have favorited this bakery (set on
 	// public profile reads).
 	FollowerCount int `json:"follower_count"`
-	// CoverImageURL is a presigned URL for the baker's storefront cover, when
-	// they've uploaded one (set on public profile reads).
+	// CoverImageURL / AvatarURL are presigned URLs for the baker's storefront
+	// cover and logo/avatar, when set (set on public profile reads).
 	CoverImageURL string    `json:"cover_image_url,omitempty"`
+	AvatarURL     string    `json:"avatar_url,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

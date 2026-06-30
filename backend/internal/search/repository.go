@@ -51,6 +51,10 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 	    COALESCE((SELECT m.s3_key FROM media m
 	              WHERE m.owner_id = bp.user_id AND m.kind = 'baker_cover'
 	                AND m.order_id IS NULL
+	              ORDER BY m.created_at DESC LIMIT 1), ''),
+	    COALESCE((SELECT m.s3_key FROM media m
+	              WHERE m.owner_id = bp.user_id AND m.kind = 'baker_avatar'
+	                AND m.order_id IS NULL
 	              ORDER BY m.created_at DESC LIMIT 1), '')
 	  FROM baker_profiles bp
 	  LEFT JOIN (
@@ -96,7 +100,7 @@ func (r *Repository) SearchBakers(ctx context.Context, q BakerSearchQuery) ([]Ba
 		if err := rows.Scan(&res.ID, &res.BusinessName, &res.Bio, &res.Status,
 			&res.LeadTimeDays, &res.DeliveryRadiusKM, &res.Lat, &res.Lng,
 			&res.AvgRating, &res.ReviewCount, &res.DistanceKM,
-			&res.CoverImageURL); err != nil {
+			&res.CoverImageURL, &res.AvatarURL); err != nil {
 			return nil, err
 		}
 		out = append(out, res)
