@@ -26,3 +26,18 @@ func (s *Service) Add(ctx context.Context, userID, productID string) error {
 func (s *Service) Remove(ctx context.Context, userID, productID string) error {
 	return s.repo.Remove(ctx, userID, productID)
 }
+
+// ListBakers returns a user's favorited baker ids.
+func (s *Service) ListBakers(ctx context.Context, userID string) ([]string, error) {
+	return s.repo.ListBakerIDs(ctx, userID)
+}
+
+// AddBaker favorites a bakery for a user.
+func (s *Service) AddBaker(ctx context.Context, userID, bakerID string) error {
+	return s.repo.AddBaker(ctx, userID, bakerID)
+}
+
+// RemoveBaker un-favorites a bakery for a user.
+func (s *Service) RemoveBaker(ctx context.Context, userID, bakerID string) error {
+	return s.repo.RemoveBaker(ctx, userID, bakerID)
+}
