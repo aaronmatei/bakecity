@@ -80,6 +80,7 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
   static const int _maxReferences = 5;
 
   DateTime? _eventDate;
+  String _fulfillment = 'delivery';
   bool _submitting = false;
   bool _pickingPhoto = false;
 
@@ -143,7 +144,9 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
             bakerId: widget.product.bakerId,
             productId: widget.product.id,
             eventDate: _eventDate!,
-            deliveryAddress: _address.text.trim(),
+            fulfillment: _fulfillment,
+            deliveryAddress:
+                _fulfillment == 'delivery' ? _address.text.trim() : '',
             specs: _buildSpecs(),
           );
       // Attach reference photos to the new order. Best-effort: the order is
@@ -331,17 +334,43 @@ class _OrderRequestFormState extends ConsumerState<_OrderRequestForm> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _address,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  labelText: 'Delivery address',
-                  hintText: 'Where should we deliver?',
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                ),
-                validator: (v) =>
-                    Validators.required(v, field: 'Delivery address'),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                      value: 'delivery',
+                      label: Text('Delivery'),
+                      icon: Icon(Icons.delivery_dining_outlined)),
+                  ButtonSegment(
+                      value: 'pickup',
+                      label: Text('Pickup'),
+                      icon: Icon(Icons.storefront_outlined)),
+                ],
+                selected: {_fulfillment},
+                onSelectionChanged: (s) =>
+                    setState(() => _fulfillment = s.first),
               ),
+              const SizedBox(height: 8),
+              Text(
+                _fulfillment == 'delivery'
+                    ? 'The baker will add a courier fee to your quote.'
+                    : 'You\'ll collect the order from the baker — no courier fee.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              if (_fulfillment == 'delivery') ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _address,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'Delivery address',
+                    hintText: 'Where should we deliver?',
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                  ),
+                  validator: (v) =>
+                      Validators.required(v, field: 'Delivery address'),
+                ),
+              ],
               const SizedBox(height: 28),
               PrimaryButton(
                 label: 'Send request',

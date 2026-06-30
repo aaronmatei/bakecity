@@ -51,6 +51,7 @@ class OrdersController extends AsyncNotifier<List<Order>> {
     required DateTime eventDate,
     String? productId,
     String? deliveryAddress,
+    String fulfillment = 'delivery',
     double? lat,
     double? lng,
     Map<String, String> specs = const {},
@@ -60,6 +61,7 @@ class OrdersController extends AsyncNotifier<List<Order>> {
       data: {
         'baker_id': bakerId,
         'event_date': _ymd(eventDate),
+        'fulfillment': fulfillment,
         if (productId != null) 'product_id': productId,
         if (deliveryAddress != null && deliveryAddress.isNotEmpty)
           'delivery_address': deliveryAddress,

@@ -40,6 +40,7 @@ class Quote {
     this.expiresAt,
     this.proposedBy = 'baker',
     this.isFinal = false,
+    this.deliveryFeeCents = 0,
   });
 
   final String id;
@@ -59,9 +60,16 @@ class Quote {
   /// Whether the baker marked this as their best & final offer.
   final bool isFinal;
 
+  /// Courier charge in cents the baker proposed (cake price is [totalCents]).
+  final int deliveryFeeCents;
+
   bool get isCustomerOffer => proposedBy == 'customer';
 
-  int get balanceCents => totalCents - depositCents;
+  /// What the customer pays overall: cake + delivery.
+  int get grandTotalCents => totalCents + deliveryFeeCents;
+
+  /// Remaining after the deposit, including the courier charge.
+  int get balanceCents => grandTotalCents - depositCents;
 
   factory Quote.fromJson(Map<String, dynamic> json) {
     // Backend quote: { amount (KES total), deposit_pct, status, version }.
@@ -90,6 +98,8 @@ class Quote {
       createdAt: _date(json['created_at']) ?? DateTime.now(),
       proposedBy: json['proposed_by'] as String? ?? 'baker',
       isFinal: json['is_final'] as bool? ?? false,
+      deliveryFeeCents:
+          (((json['delivery_fee'] as num?)?.toDouble() ?? 0) * 100).round(),
     );
   }
 

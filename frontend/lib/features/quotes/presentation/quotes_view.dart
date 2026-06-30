@@ -71,6 +71,9 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
   Future<void> _openQuoteForm({required bool isUpdate}) async {
     final suggested = await _suggestedAmount();
     if (!mounted) return;
+    final isDelivery =
+        ref.read(orderDetailProvider(widget.orderId)).valueOrNull?.isPickup !=
+            true;
     final sent = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -79,11 +82,13 @@ class _QuotesViewState extends ConsumerState<QuotesView> {
         child: _QuoteForm(
           isUpdate: isUpdate,
           initialAmount: suggested,
-          onSubmit: (amount, depositPct, validUntil, isFinal) async {
+          isDelivery: isDelivery,
+          onSubmit: (amount, depositPct, deliveryFee, validUntil, isFinal) async {
             await ref.read(quotesControllerProvider).submitQuote(
                   orderId: widget.orderId,
                   amount: amount,
                   depositPct: depositPct,
+                  deliveryFee: deliveryFee,
                   validUntil: validUntil,
                   isFinal: isFinal,
                 );
@@ -346,7 +351,7 @@ class _QuoteCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                Formatters.currencyFromCents(quote.totalCents),
+                Formatters.currencyFromCents(quote.grandTotalCents),
                 style: context.tt.headlineSmall,
               ),
               _StatusChip(status: quote.status, expired: _isExpired),
@@ -366,6 +371,16 @@ class _QuoteCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: Insets.md),
+          if (quote.deliveryFeeCents > 0) ...[
+            _Line(
+              label: 'Cake',
+              value: Formatters.currencyFromCents(quote.totalCents),
+            ),
+            _Line(
+              label: 'Delivery (courier)',
+              value: Formatters.currencyFromCents(quote.deliveryFeeCents),
+            ),
+          ],
           _Line(
             label: 'Deposit due now',
             value: '${Formatters.currencyFromCents(quote.depositCents)}'
@@ -373,7 +388,7 @@ class _QuoteCard extends StatelessWidget {
             emphasize: true,
           ),
           _Line(
-            label: 'Balance after delivery',
+            label: 'Balance ${quote.deliveryFeeCents > 0 ? '(incl. delivery)' : 'after delivery'}',
             value: Formatters.currencyFromCents(quote.balanceCents),
           ),
           if (quote.leadTimeDays != null)
@@ -566,15 +581,20 @@ class _QuoteForm extends StatefulWidget {
     required this.isUpdate,
     required this.onSubmit,
     this.initialAmount,
+    this.isDelivery = true,
   });
 
   final bool isUpdate;
 
   /// Suggested total (KES) from the customer's chosen size, if any.
   final double? initialAmount;
+
+  /// Whether this order is for delivery (show the courier-fee field).
+  final bool isDelivery;
   final Future<void> Function(
     double amount,
     double depositPct,
+    double deliveryFee,
     DateTime? validUntil,
     bool isFinal,
   ) onSubmit;
@@ -591,6 +611,7 @@ class _QuoteFormState extends State<_QuoteForm> {
         : '',
   );
   final _depositPct = TextEditingController(text: '50');
+  final _deliveryFee = TextEditingController();
   DateTime? _validUntil;
   bool _isFinal = false;
   bool _submitting = false;
@@ -599,6 +620,7 @@ class _QuoteFormState extends State<_QuoteForm> {
   void dispose() {
     _amount.dispose();
     _depositPct.dispose();
+    _deliveryFee.dispose();
     super.dispose();
   }
 
@@ -625,6 +647,9 @@ class _QuoteFormState extends State<_QuoteForm> {
       await widget.onSubmit(
         double.parse(_amount.text.trim()),
         double.parse(_depositPct.text.trim()),
+        widget.isDelivery
+            ? (double.tryParse(_deliveryFee.text.trim()) ?? 0)
+            : 0,
         _validUntil,
         _isFinal,
       );
@@ -681,7 +706,7 @@ class _QuoteFormState extends State<_QuoteForm> {
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
                 decoration: InputDecoration(
-                  labelText: 'Total price (KES)',
+                  labelText: 'Cake price (KES)',
                   prefixIcon: const Icon(Icons.sell_outlined),
                   helperText: widget.initialAmount != null
                       ? 'Suggested from the customer\'s chosen size — adjust as needed'
@@ -701,6 +726,22 @@ class _QuoteFormState extends State<_QuoteForm> {
                 ),
                 validator: _validatePct,
               ),
+              if (widget.isDelivery) ...[
+                const SizedBox(height: Insets.lg),
+                TextFormField(
+                  controller: _deliveryFee,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Delivery fee (KES)',
+                    helperText: 'Courier charge added to the customer\'s balance',
+                    prefixIcon: Icon(Icons.delivery_dining_outlined),
+                  ),
+                ),
+              ],
               const SizedBox(height: Insets.sm),
               ListTile(
                 contentPadding: EdgeInsets.zero,

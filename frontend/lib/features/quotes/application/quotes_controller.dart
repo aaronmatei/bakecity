@@ -33,6 +33,7 @@ class QuotesController {
     required String orderId,
     required double amount,
     required double depositPct,
+    double deliveryFee = 0,
     DateTime? validUntil,
     bool isFinal = false,
   }) async {
@@ -41,6 +42,7 @@ class QuotesController {
       data: {
         'amount': amount,
         'deposit_pct': depositPct,
+        'delivery_fee': deliveryFee,
         'is_final': isFinal,
         if (validUntil != null)
           'valid_until': validUntil.toUtc().toIso8601String(),

@@ -39,6 +39,8 @@ class Order {
     this.totalCents,
     this.depositCents,
     this.balanceCents,
+    this.deliveryFeeCents = 0,
+    this.fulfillmentType = 'delivery',
     this.customerName,
     this.bakerName,
     this.specs = const [],
@@ -61,6 +63,14 @@ class Order {
   final int? totalCents;
   final int? depositCents;
   final int? balanceCents;
+
+  /// Courier charge in cents (0 for pickup). Included in [totalCents]/balance.
+  final int deliveryFeeCents;
+
+  /// "delivery" (courier) or "pickup" (customer collects).
+  final String fulfillmentType;
+
+  bool get isPickup => fulfillmentType == 'pickup';
 
   /// Counterparty display names from the API (the customer's personal name and
   /// the bakery's business name).
@@ -95,6 +105,8 @@ class Order {
           (json['deposit_cents'] as num?)?.toInt(),
       balanceCents: _cents(json['balance_amount']) ??
           (json['balance_cents'] as num?)?.toInt(),
+      deliveryFeeCents: _cents(json['delivery_fee']) ?? 0,
+      fulfillmentType: (json['fulfillment_type'] as String?) ?? 'delivery',
       customerName: json['customer_name'] as String?,
       bakerName: json['baker_name'] as String?,
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
