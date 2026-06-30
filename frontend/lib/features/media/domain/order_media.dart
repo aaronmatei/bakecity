@@ -7,6 +7,8 @@ class OrderMedia {
     required this.kind,
     this.url,
     this.thumbUrl,
+    this.stage,
+    this.mimeType,
   });
 
   final String id;
@@ -17,6 +19,23 @@ class OrderMedia {
 
   /// Thumbnail presigned URL, when a thumbnail exists.
   final String? thumbUrl;
+
+  /// Production stage this item was captured for (e.g. "Baking"), when scoped.
+  final String? stage;
+
+  /// Upload content type, e.g. `image/jpeg` or `video/mp4`.
+  final String? mimeType;
+
+  /// Whether this item is a video (by mime type, falling back to the URL's
+  /// file extension when the mime type is absent on older records).
+  bool get isVideo {
+    final mt = mimeType;
+    if (mt != null && mt.startsWith('video/')) return true;
+    final path = (url ?? '').split('?').first.toLowerCase();
+    return path.endsWith('.mp4') ||
+        path.endsWith('.mov') ||
+        path.endsWith('.webm');
+  }
 
   /// Best URL to display: prefer the thumbnail, fall back to the full image.
   String? get displayUrl {
@@ -31,6 +50,8 @@ class OrderMedia {
       kind: json['kind'] as String? ?? '',
       url: json['url'] as String?,
       thumbUrl: json['thumb_url'] as String?,
+      stage: json['stage'] as String?,
+      mimeType: json['mime_type'] as String?,
     );
   }
 }

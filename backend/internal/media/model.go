@@ -32,6 +32,10 @@ type Media struct {
 	S3Key     string    `json:"s3_key"`
 	ThumbKey  string    `json:"thumb_key,omitempty"`
 	Status    string    `json:"status"`
+	// Stage scopes a production media item to a named stage (e.g. "Baking").
+	Stage string `json:"stage,omitempty"`
+	// MimeType is the upload's content type, letting clients tell video from image.
+	MimeType  string    `json:"mime_type,omitempty"`
 	URL       string    `json:"url,omitempty"`
 	ThumbURL  string    `json:"thumb_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
@@ -42,6 +46,8 @@ type PresignRequest struct {
 	Kind        string `json:"kind" binding:"required"`
 	ContentType string `json:"content_type" binding:"required"`
 	OrderID     string `json:"order_id"`
+	// Stage optionally scopes a production upload to a named stage.
+	Stage string `json:"stage"`
 }
 
 // PresignResponse contains the presigned upload URL and object key.

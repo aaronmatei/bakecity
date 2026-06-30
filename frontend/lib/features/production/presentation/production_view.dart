@@ -21,7 +21,8 @@ import '../application/production_controller.dart';
 import 'production_timeline.dart';
 
 /// Production view: the customer watches an animated stage timeline come to life
-/// as their cake is made; the baker (only) also gets the update composer.
+/// as their cake is made; the baker steps through the fixed stages — tapping the
+/// current one to post photos/videos and notes, then marking it done to advance.
 class ProductionView extends ConsumerStatefulWidget {
   const ProductionView({super.key, required this.orderId});
 
@@ -32,12 +33,6 @@ class ProductionView extends ConsumerStatefulWidget {
 }
 
 class _ProductionViewState extends ConsumerState<ProductionView> {
-  final _stageController = TextEditingController();
-  final _notesController = TextEditingController();
-  double _progress = 0;
-  bool _submitting = false;
-  bool _uploading = false;
-  String? _mediaId;
   StreamSubscription<RealtimeEvent>? _wsSub;
 
   @override
@@ -65,68 +60,16 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
   @override
   void dispose() {
     _wsSub?.cancel();
-    _stageController.dispose();
-    _notesController.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final stage = _stageController.text.trim();
-    final messenger = ScaffoldMessenger.of(context);
-    if (stage.isEmpty) {
-      messenger
-          .showSnackBar(const SnackBar(content: Text('Enter a stage name.')));
-      return;
-    }
-    setState(() => _submitting = true);
-    try {
-      // Derive the effective progress from the stage so a baker who posts e.g.
-      // "Ready" without moving the slider still sends 100% (which marks the
-      // order ready for delivery), never less than the slider value.
-      final manual = _progress.round();
-      final baseline = classifyStage(stage, manual).baselinePct;
-      final effectivePct = manual > baseline ? manual : baseline;
-      await ref.read(productionControllerProvider).addUpdate(
-            orderId: widget.orderId,
-            stage: stage,
-            progressPct: effectivePct,
-            notes: _notesController.text.trim(),
-            mediaId: _mediaId,
-          );
-      _stageController.clear();
-      _notesController.clear();
-      setState(() {
-        _progress = 0;
-        _mediaId = null;
-      });
-      ref.invalidate(orderMediaProvider(widget.orderId));
-      messenger.showSnackBar(const SnackBar(content: Text('Update posted.')));
-    } on AppException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _attachPhoto() async {
-    setState(() => _uploading = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final mediaId = await ref.read(uploadServiceProvider).pickAndUpload(
-            kind: MediaKind.production,
-            orderId: widget.orderId,
-          );
-      if (mediaId != null) {
-        setState(() => _mediaId = mediaId);
-        ref.invalidate(orderMediaProvider(widget.orderId));
-        messenger
-            .showSnackBar(const SnackBar(content: Text('Photo attached.')));
-      }
-    } on AppException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
+  Future<void> _openStageSheet(BakeStage stage) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _StageComposerSheet(orderId: widget.orderId, stage: stage),
+    );
   }
 
   @override
@@ -156,37 +99,32 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
       ),
       data: (items) {
         final showTimeline = items.isNotEmpty || _productionStarted(status);
-        return Column(
-          children: [
-            Expanded(
-              child: RefreshIndicator(
-                color: context.cs.primary,
-                onRefresh: () async {
-                  ref.invalidate(orderProductionProvider(widget.orderId));
-                  ref.invalidate(orderMediaProvider(widget.orderId));
-                  ref.invalidate(orderDetailProvider(widget.orderId));
-                },
-                child: ListView(
-                  padding: const EdgeInsets.all(Insets.screenH),
-                  children: [
-                    if (references.isNotEmpty) ...[
-                      _ReferenceStrip(references: references),
-                      const SizedBox(height: Insets.xl),
-                    ],
-                    if (showTimeline)
-                      ProductionTimeline(
-                        updates: items,
-                        status: status,
-                        productionMedia: productionMedia,
-                      )
-                    else
-                      _PreProduction(status: status),
-                  ],
-                ),
-              ),
-            ),
-            if (canPost) _composer(),
-          ],
+        return RefreshIndicator(
+          color: context.cs.primary,
+          onRefresh: () async {
+            ref.invalidate(orderProductionProvider(widget.orderId));
+            ref.invalidate(orderMediaProvider(widget.orderId));
+            ref.invalidate(orderDetailProvider(widget.orderId));
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(Insets.screenH),
+            children: [
+              if (references.isNotEmpty) ...[
+                _ReferenceStrip(references: references),
+                const SizedBox(height: Insets.xl),
+              ],
+              if (showTimeline)
+                ProductionTimeline(
+                  updates: items,
+                  status: status,
+                  productionMedia: productionMedia,
+                  editable: canPost,
+                  onUpdateStage: _openStageSheet,
+                )
+              else
+                _PreProduction(status: status),
+            ],
+          ),
         );
       },
     );
@@ -199,76 +137,185 @@ class _ProductionViewState extends ConsumerState<ProductionView> {
       s == OrderStatus.dispatched ||
       s == OrderStatus.delivered ||
       s == OrderStatus.completed;
+}
 
-  Widget _composer() {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.all(Insets.lg),
-        decoration: BoxDecoration(
-          color: context.cs.surface,
-          border: Border(top: BorderSide(color: context.cs.outlineVariant)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _stageController,
-              decoration: const InputDecoration(
-                labelText: 'Stage (e.g. Baking, Decorating)',
+/// The per-stage composer: attach photos/videos (scoped to the stage), add
+/// notes, then mark the stage done — which advances the order to the next stage.
+class _StageComposerSheet extends ConsumerStatefulWidget {
+  const _StageComposerSheet({required this.orderId, required this.stage});
+
+  final String orderId;
+  final BakeStage stage;
+
+  @override
+  ConsumerState<_StageComposerSheet> createState() =>
+      _StageComposerSheetState();
+}
+
+class _StageComposerSheetState extends ConsumerState<_StageComposerSheet> {
+  final _notesController = TextEditingController();
+  bool _uploading = false;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add({required bool video}) async {
+    setState(() => _uploading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final upload = ref.read(uploadServiceProvider);
+    try {
+      final mediaId = video
+          ? await upload.pickAndUploadVideo(
+              kind: MediaKind.production,
+              orderId: widget.orderId,
+              stage: widget.stage.label,
+            )
+          : await upload.pickAndUpload(
+              kind: MediaKind.production,
+              orderId: widget.orderId,
+              stage: widget.stage.label,
+            );
+      if (mediaId != null) {
+        ref.invalidate(orderMediaProvider(widget.orderId));
+        messenger.showSnackBar(
+            SnackBar(content: Text(video ? 'Video added.' : 'Photo added.')));
+      }
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _markDone() async {
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(productionControllerProvider).addUpdate(
+            orderId: widget.orderId,
+            stage: widget.stage.label,
+            progressPct: stageDonePct(widget.stage),
+            notes: _notesController.text.trim(),
+          );
+      ref.invalidate(orderMediaProvider(widget.orderId));
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(content: Text('${widget.stage.label} marked done.')),
+      );
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.cs;
+    final media = ref.watch(orderMediaProvider(widget.orderId)).valueOrNull ??
+        const <OrderMedia>[];
+    final stageMedia = media
+        .where((m) =>
+            m.kind == MediaKind.production &&
+            m.stage != null &&
+            m.stage!.trim().isNotEmpty &&
+            classifyStage(m.stage!, 0) == widget.stage)
+        .toList();
+    final busy = _uploading || _submitting;
+    final isLast = widget.stage == kWorkStages.last;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: Insets.lg,
+        right: Insets.lg,
+        top: Insets.sm,
+        bottom: MediaQuery.of(context).viewInsets.bottom + Insets.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(widget.stage.icon, color: cs.primary),
+              const SizedBox(width: Insets.sm),
+              Text(widget.stage.label, style: context.tt.titleLarge),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Add photos or a video, jot any notes, then mark this stage done.',
+            style: context.tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (stageMedia.isNotEmpty) ...[
+            const SizedBox(height: Insets.lg),
+            SizedBox(
+              height: 88,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: stageMedia.length,
+                separatorBuilder: (_, __) => const SizedBox(width: Insets.sm),
+                itemBuilder: (context, i) =>
+                    StageMediaTile(media: stageMedia[i], size: 88),
               ),
-            ),
-            const SizedBox(height: Insets.sm),
-            TextField(
-              controller: _notesController,
-              decoration: const InputDecoration(labelText: 'Notes (optional)'),
-            ),
-            Row(
-              children: [
-                Text('Progress: ${_progress.round()}%'),
-                Expanded(
-                  child: Slider(
-                    value: _progress,
-                    max: 100,
-                    divisions: 20,
-                    label: '${_progress.round()}%',
-                    onChanged: _submitting
-                        ? null
-                        : (v) => setState(() => _progress = v),
-                  ),
-                ),
-              ],
-            ),
-            if (_progress.round() == 100)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  'Posting at 100% marks the order ready for delivery.',
-                  style: context.tt.bodySmall?.copyWith(color: context.cs.primary),
-                ),
-              ),
-            OutlinedButton.icon(
-              onPressed: _uploading || _submitting ? null : _attachPhoto,
-              icon: _uploading
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(_mediaId == null
-                      ? Icons.add_a_photo_outlined
-                      : Icons.check_circle_outline),
-              label: Text(_mediaId == null ? 'Attach photo' : 'Photo attached'),
-            ),
-            const SizedBox(height: Insets.sm),
-            PrimaryButton(
-              label: 'Post update',
-              icon: Icons.add_outlined,
-              isLoading: _submitting,
-              onPressed: _submitting ? null : _submit,
             ),
           ],
-        ),
+          const SizedBox(height: Insets.lg),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : () => _add(video: false),
+                  icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                  label: const Text('Photo'),
+                ),
+              ),
+              const SizedBox(width: Insets.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : () => _add(video: true),
+                  icon: const Icon(Icons.videocam_outlined, size: 18),
+                  label: const Text('Video'),
+                ),
+              ),
+            ],
+          ),
+          if (_uploading)
+            const Padding(
+              padding: EdgeInsets.only(top: Insets.sm),
+              child: LinearProgressIndicator(),
+            ),
+          const SizedBox(height: Insets.md),
+          TextField(
+            controller: _notesController,
+            minLines: 1,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Notes (optional)',
+              hintText: 'e.g. Two layers in the oven now',
+            ),
+          ),
+          const SizedBox(height: Insets.lg),
+          PrimaryButton(
+            label: isLast ? 'Mark done · ready for delivery' : 'Mark stage done',
+            icon: Icons.check_circle_outline,
+            isLoading: _submitting,
+            onPressed: busy ? null : _markDone,
+          ),
+          if (isLast)
+            Padding(
+              padding: const EdgeInsets.only(top: Insets.sm),
+              child: Text(
+                'Completing this stage marks the order ready for delivery.',
+                textAlign: TextAlign.center,
+                style: context.tt.bodySmall?.copyWith(color: cs.primary),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -66,7 +66,11 @@ func (s *Service) Presign(ctx context.Context, ownerID string, req PresignReques
 		return nil, err
 	}
 
-	m, err := s.repo.Create(ctx, ownerID, req.OrderID, kind, key)
+	stage := strings.TrimSpace(req.Stage)
+	if len(stage) > 50 {
+		stage = stage[:50]
+	}
+	m, err := s.repo.Create(ctx, ownerID, req.OrderID, kind, key, stage, ct)
 	if err != nil {
 		return nil, err
 	}

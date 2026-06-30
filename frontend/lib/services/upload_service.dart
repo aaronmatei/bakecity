@@ -63,11 +63,18 @@ class UploadService {
     return _picker.pickImage(source: source, imageQuality: 85);
   }
 
-  /// Requests a presigned upload target for [kind] (optionally tied to an order).
+  /// Opens the system picker and returns the chosen video, if any.
+  Future<XFile?> pickVideo({ImageSource source = ImageSource.gallery}) {
+    return _picker.pickVideo(source: source);
+  }
+
+  /// Requests a presigned upload target for [kind] (optionally tied to an order
+  /// and a production [stage]).
   Future<PresignedUpload> requestPresign({
     required String kind,
     required String contentType,
     String? orderId,
+    String? stage,
   }) async {
     final response = await _api.post<Map<String, dynamic>>(
       ApiEndpoints.mediaPresign,
@@ -75,6 +82,7 @@ class UploadService {
         'kind': kind,
         'content_type': contentType,
         if (orderId != null) 'order_id': orderId,
+        if (stage != null && stage.isNotEmpty) 'stage': stage,
       },
     );
     final data = response.data;
@@ -91,11 +99,12 @@ class UploadService {
   Future<void> complete(String mediaId) =>
       _api.post<void>(ApiEndpoints.mediaComplete(mediaId));
 
-  /// Picks an image and runs the full upload flow. Returns the media id, or
-  /// null if the user cancelled.
+  /// Picks an image and runs the full upload flow, optionally scoping it to a
+  /// production [stage]. Returns the media id, or null if the user cancelled.
   Future<String?> pickAndUpload({
     required String kind,
     String? orderId,
+    String? stage,
     ImageSource source = ImageSource.gallery,
   }) async {
     final file = await pickImage(source: source);
@@ -106,7 +115,36 @@ class UploadService {
       contentType: file.mimeType ?? 'image/jpeg',
       kind: kind,
       orderId: orderId,
+      stage: stage,
     );
+  }
+
+  /// Picks a video and runs the full upload flow, optionally scoping it to a
+  /// production [stage]. Returns the media id, or null if the user cancelled.
+  Future<String?> pickAndUploadVideo({
+    required String kind,
+    String? orderId,
+    String? stage,
+    ImageSource source = ImageSource.gallery,
+  }) async {
+    final file = await pickVideo(source: source);
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    return uploadBytes(
+      bytes: bytes,
+      contentType: file.mimeType ?? _videoContentType(file.name),
+      kind: kind,
+      orderId: orderId,
+      stage: stage,
+    );
+  }
+
+  /// Best-effort video content type from a file name extension.
+  static String _videoContentType(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.mov')) return 'video/quicktime';
+    if (lower.endsWith('.webm')) return 'video/webm';
+    return 'video/mp4';
   }
 
   /// Uploads raw bytes via the presign flow and returns the media id.
@@ -115,11 +153,13 @@ class UploadService {
     required String contentType,
     required String kind,
     String? orderId,
+    String? stage,
   }) async {
     final presign = await requestPresign(
       kind: kind,
       contentType: contentType,
       orderId: orderId,
+      stage: stage,
     );
 
     // Upload straight to the storage provider (bypasses our API auth headers).

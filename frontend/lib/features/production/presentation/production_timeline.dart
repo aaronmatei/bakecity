@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/helpers/formatters.dart';
@@ -10,9 +11,9 @@ import '../../../widgets/media_thumbnail.dart';
 import '../../media/domain/order_media.dart';
 import '../domain/production_update.dart';
 
-/// The canonical stages a custom bake moves through. Bakers post free-form
-/// stage strings; [classifyStage] maps each to one of these so the customer
-/// sees a consistent, animated journey.
+/// The canonical stages a custom bake moves through. Bakers advance through the
+/// fixed [kWorkStages] one at a time; [BakeStage.ready] is the terminal state,
+/// reached automatically once the last work stage is marked done.
 enum BakeStage { ingredients, preparation, baking, decoration, packaging, ready }
 
 extension BakeStageUi on BakeStage {
@@ -33,25 +34,33 @@ extension BakeStageUi on BakeStage {
         BakeStage.packaging => Icons.inventory_2_outlined,
         BakeStage.ready => Icons.check_circle_outline,
       };
-
-  /// A representative completion percentage for this stage, used so the progress
-  /// ring still advances when a baker posts a stage name without moving the
-  /// percentage slider (the common case).
-  int get baselinePct => switch (this) {
-        BakeStage.ingredients => 10,
-        BakeStage.preparation => 30,
-        BakeStage.baking => 55,
-        BakeStage.decoration => 75,
-        BakeStage.packaging => 90,
-        BakeStage.ready => 100,
-      };
 }
 
-/// Classifies a free-form baker stage string, falling back to progress %.
+/// The fixed, ordered set of stages a baker steps through. "Ready" is excluded
+/// — it is the terminal state the order reaches when packaging is marked done.
+const List<BakeStage> kWorkStages = [
+  BakeStage.ingredients,
+  BakeStage.preparation,
+  BakeStage.baking,
+  BakeStage.decoration,
+  BakeStage.packaging,
+];
+
+/// The cumulative progress percentage once [stage] is marked done. Work stages
+/// split 0–100 evenly, so completing the last one (packaging) posts 100 and the
+/// backend flips the order to READY.
+int stageDonePct(BakeStage stage) {
+  final i = kWorkStages.indexOf(stage);
+  if (i < 0) return 100; // ready / terminal
+  return ((i + 1) * 100 / kWorkStages.length).round();
+}
+
+/// Classifies a stage string to a [BakeStage] (bakers now post canonical labels,
+/// but this stays tolerant of free-form/legacy values), falling back to the
+/// progress percentage.
 BakeStage classifyStage(String raw, int pct) {
   final s = raw.toLowerCase();
   bool has(List<String> ks) => ks.any(s.contains);
-  if (has(['ready', 'done', 'complete', 'finish'])) return BakeStage.ready;
   if (has(['pack', 'box', 'wrap'])) return BakeStage.packaging;
   if (has(['decor', 'ice', 'icing', 'frost', 'pip', 'fondant', 'garnish'])) {
     return BakeStage.decoration;
@@ -63,6 +72,7 @@ BakeStage classifyStage(String raw, int pct) {
   if (has(['ingredient', 'purchas', 'shop', 'buy', 'source'])) {
     return BakeStage.ingredients;
   }
+  if (has(['ready', 'done', 'complete', 'finish'])) return BakeStage.ready;
   // Fall back to progress buckets.
   if (pct >= 100) return BakeStage.ready;
   if (pct >= 80) return BakeStage.packaging;
@@ -75,20 +85,26 @@ BakeStage classifyStage(String raw, int pct) {
 enum _NodeState { completed, current, future }
 
 /// The signature production tracker: an animated overall-progress ring above a
-/// vertical timeline of stages whose nodes light up, draw checkmarks and fill
-/// their connectors as work progresses. The current stage expands with a live
-/// media carousel.
+/// vertical timeline of fixed stages. Completed stages show their own scoped
+/// photos/videos; the current stage is live and — for the baker — actionable
+/// via [onUpdateStage].
 class ProductionTimeline extends StatelessWidget {
   const ProductionTimeline({
     super.key,
     required this.updates,
     required this.status,
     required this.productionMedia,
+    this.editable = false,
+    this.onUpdateStage,
   });
 
   final List<ProductionUpdate> updates;
   final OrderStatus? status;
   final List<OrderMedia> productionMedia;
+
+  /// When true, the baker may act on the current stage (post media / mark done).
+  final bool editable;
+  final void Function(BakeStage stage)? onUpdateStage;
 
   bool get _complete =>
       status == OrderStatus.ready ||
@@ -100,71 +116,86 @@ class ProductionTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final sorted = [...updates]
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    final latest = sorted.isNotEmpty ? sorted.last : null;
-    final started = sorted.isNotEmpty || status == OrderStatus.inProduction;
+    final complete = _complete;
+    final started =
+        sorted.isNotEmpty || status == OrderStatus.inProduction || complete;
 
-    final current = _complete
-        ? BakeStage.ready
-        : (latest != null
-            ? classifyStage(latest.stage, latest.progressPct)
-            : BakeStage.ingredients);
-
-    // Reaching the terminal "Ready" stage counts as complete for display, even
-    // if the order status hasn't advanced yet — so it never reads "Ready · live".
-    final complete = _complete || (started && current == BakeStage.ready);
-
-    // The ring reflects the explicit progress %, but never less than the
-    // current stage's baseline — so a baker who posts "Decoration" without
-    // touching the slider still shows meaningful progress instead of 0%.
-    final pct = complete
-        ? 100
-        : (started
-            ? math.max(latest?.progressPct ?? 0, current.baselinePct)
-            : 0);
-    final currentIndex = current.index;
-
-    // Latest update mapped to each stage, for completed-stage timestamps.
+    // Latest update mapped to each stage (for completed-stage timestamps/notes).
     final byStage = <BakeStage, ProductionUpdate>{};
     for (final u in sorted) {
       byStage[classifyStage(u.stage, u.progressPct)] = u;
     }
 
+    // Completed work stages: those with an update, or all of them once the order
+    // has advanced past production.
+    final completed = <BakeStage>{};
+    if (complete) {
+      completed.addAll(kWorkStages);
+    } else {
+      for (final s in byStage.keys) {
+        if (kWorkStages.contains(s)) completed.add(s);
+        if (s == BakeStage.ready) completed.addAll(kWorkStages);
+      }
+    }
+
+    // Current = first work stage not yet completed.
+    BakeStage? current;
+    if (!complete) {
+      current = kWorkStages.firstWhere(
+        (s) => !completed.contains(s),
+        orElse: () => BakeStage.packaging,
+      );
+    }
+
+    final pct = complete ? 100 : completed.length * (100 ~/ kWorkStages.length);
+
+    // Scope each production media item to its stage; older stage-less uploads
+    // fall back to the current stage (or packaging once complete).
+    final mediaByStage = <BakeStage, List<OrderMedia>>{};
+    for (final m in productionMedia) {
+      var s = (m.stage != null && m.stage!.trim().isNotEmpty)
+          ? classifyStage(m.stage!, 0)
+          : (current ?? BakeStage.packaging);
+      if (s == BakeStage.ready) s = BakeStage.packaging;
+      (mediaByStage[s] ??= <OrderMedia>[]).add(m);
+    }
+
+    _NodeState stateFor(BakeStage s) {
+      if (s == BakeStage.ready) {
+        return complete ? _NodeState.completed : _NodeState.future;
+      }
+      if (completed.contains(s)) return _NodeState.completed;
+      if (s == current) return _NodeState.current;
+      return _NodeState.future;
+    }
+
+    final headerLabel = complete
+        ? 'All done · Ready for delivery'
+        : !started
+            ? (editable ? 'Tap a stage to begin' : 'Waiting for the baker to begin')
+            : '$pct% · ${current?.label ?? 'Finishing up'}'
+                '${editable ? '' : ' in progress'}';
+
     const stages = BakeStage.values;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ProgressHeader(
-          pct: pct,
-          label: complete
-              ? 'All done · Ready for delivery'
-              : started
-                  ? '$pct% · ${current.label} in progress'
-                  : 'Waiting for the baker to begin',
-        ),
+        _ProgressHeader(pct: pct, label: headerLabel),
         const SizedBox(height: Insets.xl),
         for (int i = 0; i < stages.length; i++)
           _StageRow(
             stage: stages[i],
-            state: _stateFor(i, currentIndex, started, complete),
+            state: stateFor(stages[i]),
+            started: started,
             update: byStage[stages[i]],
+            media: mediaByStage[stages[i]] ?? const [],
             isLast: i == stages.length - 1,
-            // Live media only on the active stage.
-            media: (_stateFor(i, currentIndex, started, complete) ==
-                        _NodeState.current &&
-                    !complete)
-                ? productionMedia
-                : const [],
+            actionable:
+                editable && !complete && stages[i] == current,
+            onUpdate: onUpdateStage,
           ),
       ],
     );
-  }
-
-  _NodeState _stateFor(int i, int currentIndex, bool started, bool complete) {
-    if (complete) return _NodeState.completed;
-    if (!started) return i == 0 ? _NodeState.current : _NodeState.future;
-    if (i < currentIndex) return _NodeState.completed;
-    if (i == currentIndex) return _NodeState.current;
-    return _NodeState.future;
   }
 }
 
@@ -266,16 +297,22 @@ class _StageRow extends StatelessWidget {
   const _StageRow({
     required this.stage,
     required this.state,
+    required this.started,
     required this.update,
-    required this.isLast,
     required this.media,
+    required this.isLast,
+    required this.actionable,
+    required this.onUpdate,
   });
 
   final BakeStage stage;
   final _NodeState state;
+  final bool started;
   final ProductionUpdate? update;
-  final bool isLast;
   final List<OrderMedia> media;
+  final bool isLast;
+  final bool actionable;
+  final void Function(BakeStage stage)? onUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -297,8 +334,11 @@ class _StageRow extends StatelessWidget {
               child: _StageCard(
                 stage: stage,
                 state: state,
+                started: started,
                 update: update,
                 media: media,
+                actionable: actionable,
+                onUpdate: onUpdate,
               ),
             ),
           ),
@@ -498,20 +538,27 @@ class _StageCard extends StatelessWidget {
   const _StageCard({
     required this.stage,
     required this.state,
+    required this.started,
     required this.update,
     required this.media,
+    required this.actionable,
+    required this.onUpdate,
   });
 
   final BakeStage stage;
   final _NodeState state;
+  final bool started;
   final ProductionUpdate? update;
   final List<OrderMedia> media;
+  final bool actionable;
+  final void Function(BakeStage stage)? onUpdate;
 
   @override
   Widget build(BuildContext context) {
     final cs = context.cs;
     final isCurrent = state == _NodeState.current;
     final muted = state == _NodeState.future;
+    final live = isCurrent && started;
 
     final title = Text(
       stage.label,
@@ -526,17 +573,19 @@ class _StageCard extends StatelessWidget {
           update != null
               ? 'Done · ${Formatters.relativeTime(update!.createdAt)}'
               : 'Done',
-          style: context.tt.bodySmall
-              ?.copyWith(color: context.bake.success),
+          style: context.tt.bodySmall?.copyWith(color: context.bake.success),
         ),
-      _NodeState.current => _InProgressLabel(
-          note: update?.notes,
-        ),
-      _NodeState.future => Text(
-          'Up next',
-          style: context.tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
+      _NodeState.current => live
+          ? _InProgressLabel(note: update?.notes)
+          : Text('Up next',
+              style: context.tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+      _NodeState.future => Text('Up next',
+          style: context.tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
     };
+
+    // Media tiles for completed + current stages.
+    final showMedia = state != _NodeState.future && media.isNotEmpty;
+    final tileSize = isCurrent ? 96.0 : 80.0;
 
     final card = Container(
       padding: EdgeInsets.all(isCurrent ? Insets.lg : Insets.md),
@@ -552,22 +601,30 @@ class _StageCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: title),
-              if (isCurrent) const _LiveBadge(),
+              if (live) const _LiveBadge(),
             ],
           ),
           const SizedBox(height: 2),
           subtitle,
-          if (isCurrent && media.isNotEmpty) ...[
+          if (showMedia) ...[
             const SizedBox(height: Insets.md),
             SizedBox(
-              height: 96,
+              height: tileSize,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: media.length,
                 separatorBuilder: (_, __) => const SizedBox(width: Insets.sm),
                 itemBuilder: (context, i) =>
-                    MediaThumbnail(url: media[i].displayUrl, size: 96),
+                    StageMediaTile(media: media[i], size: tileSize),
               ),
+            ),
+          ],
+          if (actionable) ...[
+            const SizedBox(height: Insets.md),
+            FilledButton.icon(
+              onPressed: () => onUpdate?.call(stage),
+              icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+              label: Text(started ? 'Update this stage' : 'Start ${stage.label}'),
             ),
           ],
         ],
@@ -647,6 +704,143 @@ class _LiveBadgeState extends State<_LiveBadge>
             style: context.tt.labelSmall?.copyWith(
               color: bake.berry,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Media tile (photo or video)
+// ---------------------------------------------------------------------------
+
+/// A square tile for a production media item. Photos reuse [MediaThumbnail]
+/// (tap to zoom); videos show a play affordance and open an inline player.
+class StageMediaTile extends StatelessWidget {
+  const StageMediaTile({super.key, required this.media, this.size = 96});
+
+  final OrderMedia media;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!media.isVideo) {
+      return MediaThumbnail(url: media.displayUrl, size: size);
+    }
+    final url = media.url ?? media.displayUrl;
+    return GestureDetector(
+      onTap: url == null
+          ? null
+          : () => showDialog<void>(
+                context: context,
+                builder: (_) => _VideoPlayerDialog(url: url),
+              ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: const Color(0xFF20140E),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Icon(Icons.play_circle_fill, color: Colors.white, size: 34),
+            Positioned(
+              bottom: 4,
+              left: 4,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Video',
+                    style: TextStyle(color: Colors.white, fontSize: 10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A full-screen inline video player for a production clip.
+class _VideoPlayerDialog extends StatefulWidget {
+  const _VideoPlayerDialog({required this.url});
+  final String url;
+
+  @override
+  State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+}
+
+class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..setLooping(true)
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _ready = true);
+        _controller.play();
+      }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() {
+      _controller.value.isPlaying ? _controller.pause() : _controller.play();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          Center(
+            child: _ready
+                ? GestureDetector(
+                    onTap: _toggle,
+                    child: AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: VideoPlayer(_controller),
+                    ),
+                  )
+                : const CircularProgressIndicator(),
+          ),
+          if (_ready)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                child: VideoProgressIndicator(_controller, allowScrubbing: true),
+              ),
+            ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
             ),
           ),
         ],
