@@ -185,7 +185,11 @@ class _ReviewCard extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: cs.primary.withValues(alpha: 0.12),
-                child: Icon(Icons.person_outline, size: 18, color: cs.primary),
+                child: (review.authorName?.trim().isNotEmpty ?? false)
+                    ? Text(review.authorName!.trim()[0].toUpperCase(),
+                        style: context.tt.titleSmall?.copyWith(
+                            color: cs.primary, fontWeight: FontWeight.w700))
+                    : Icon(Icons.person_outline, size: 18, color: cs.primary),
               ),
               const SizedBox(width: Insets.sm),
               Expanded(
@@ -194,9 +198,17 @@ class _ReviewCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text('Verified customer',
+                        Flexible(
+                          child: Text(
+                            (review.authorName?.isNotEmpty ?? false)
+                                ? review.authorName!
+                                : 'Verified customer',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: context.tt.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w600)),
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Icon(Icons.verified,
                             size: 14, color: context.bake.success),
