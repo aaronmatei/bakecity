@@ -263,11 +263,20 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
   Widget _customerActions(Delivery? d, OrderStatus? status) {
     final delivered = d?.isDelivered == true || status == OrderStatus.delivered;
     final canConfirm = status == OrderStatus.dispatched && !delivered;
+    // Only a baker can attach proof, so a delivered order WITH proof was closed
+    // out by the baker — not the customer confirming receipt.
+    final bakerMarked = delivered && d?.proofMediaId != null;
 
     if (delivered) {
-      return const InfoNote(
-        icon: Icons.check_circle_outline,
-        text: 'You\'ve confirmed receipt. Thanks!',
+      return InfoNote(
+        icon: bakerMarked
+            ? Icons.local_shipping_outlined
+            : Icons.check_circle_outline,
+        text: bakerMarked
+            ? 'Your baker marked this order delivered and attached a photo. '
+                'Settle the remaining balance on the Payment tab — or open a '
+                'dispute on the Issue tab if it didn\'t arrive or there\'s a problem.'
+            : 'You\'ve confirmed receipt. Thanks!',
       );
     }
     if (!canConfirm) {
