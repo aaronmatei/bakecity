@@ -16,8 +16,12 @@ type Order struct {
 	DepositAmount    float64     `json:"deposit_amount"`
 	BalanceAmount    float64     `json:"balance_amount"`
 	CommissionAmount float64     `json:"commission_amount"`
-	CreatedAt        time.Time   `json:"created_at"`
-	Specs            []OrderSpec `json:"specs,omitempty"`
+	// Counterparty display names (populated on list/detail reads): the customer's
+	// personal name and the bakery's business name.
+	CustomerName string      `json:"customer_name,omitempty"`
+	BakerName    string      `json:"baker_name,omitempty"`
+	CreatedAt    time.Time   `json:"created_at"`
+	Specs        []OrderSpec `json:"specs,omitempty"`
 }
 
 // OrderSpec maps to the order_specs table (free-form spec attributes).

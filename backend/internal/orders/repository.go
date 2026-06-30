@@ -26,6 +26,12 @@ const orderColumns = `id, order_number, customer_id, baker_id, COALESCE(product_
 	event_date, COALESCE(delivery_address, ''),
 	total_amount, deposit_amount, balance_amount, commission_amount, created_at`
 
+// nameExprs appends the counterparty display names (customer's name, bakery's
+// business name) for list/detail reads. Leading comma so it follows orderColumns.
+const nameExprs = `,
+	COALESCE((SELECT name FROM users WHERE id = orders.customer_id), ''),
+	COALESCE((SELECT business_name FROM baker_profiles WHERE id = orders.baker_id), '')`
+
 func scanOrder(row pgx.Row) (*Order, error) {
 	var o Order
 	err := row.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
@@ -86,7 +92,18 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Order, error) {
 	if r.db == nil {
 		return nil, pkg.ErrNotImplemented
 	}
-	return scanOrder(r.db.QueryRow(ctx, `SELECT `+orderColumns+` FROM orders WHERE id = $1`, id))
+	var o Order
+	err := r.db.QueryRow(ctx, `SELECT `+orderColumns+nameExprs+` FROM orders WHERE id = $1`, id).
+		Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
+			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
+			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt, &o.CustomerName, &o.BakerName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, pkg.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
 }
 
 // GetSpecs returns an order's spec attributes.
@@ -139,7 +156,7 @@ func (r *Repository) List(ctx context.Context, userID, bakerID string, f ListFil
 		scope = "customer_id = " + add(userID)
 	}
 
-	q := `SELECT ` + orderColumns + ` FROM orders WHERE ` + scope
+	q := `SELECT ` + orderColumns + nameExprs + ` FROM orders WHERE ` + scope
 	if f.Status != "" {
 		q += " AND status = " + add(f.Status)
 	}
@@ -156,7 +173,8 @@ func (r *Repository) List(ctx context.Context, userID, bakerID string, f ListFil
 		var o Order
 		if err := rows.Scan(&o.ID, &o.OrderNumber, &o.CustomerID, &o.BakerID, &o.ProductID, &o.Status,
 			&o.EventDate, &o.DeliveryAddress, &o.TotalAmount, &o.DepositAmount,
-			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt); err != nil {
+			&o.BalanceAmount, &o.CommissionAmount, &o.CreatedAt,
+			&o.CustomerName, &o.BakerName); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
