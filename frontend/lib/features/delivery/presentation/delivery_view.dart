@@ -74,13 +74,14 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     }
   }
 
-  Future<void> _markDelivered() async {
+  Future<void> _submitProof() async {
+    if (_proofMediaId == null) return;
     await _run(
-      () => ref.read(deliveryControllerProvider).confirm(
+      () => ref.read(deliveryControllerProvider).submitProof(
             orderId: widget.orderId,
-            proofMediaId: _proofMediaId,
+            proofMediaId: _proofMediaId!,
           ),
-      'Order marked delivered.',
+      'Proof submitted — the customer will confirm receipt.',
     );
     if (mounted) {
       ref.invalidate(orderMediaProvider(widget.orderId));
@@ -127,10 +128,13 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
         ? (Icons.local_shipping_outlined, 'Not yet dispatched', cs.onSurfaceVariant)
         : d.isDelivered
             ? (Icons.check_circle_outline, 'Delivered', context.bake.success)
-            : d.isDispatched
-                ? (Icons.local_shipping_outlined,
-                    'Out for delivery (${d.method})', cs.primary)
-                : (Icons.schedule_outlined, 'Pending', cs.onSurfaceVariant);
+            : d.awaitingConfirmation
+                ? (Icons.hourglass_top_outlined,
+                    'Proof submitted — awaiting confirmation', cs.primary)
+                : d.isDispatched
+                    ? (Icons.local_shipping_outlined,
+                        'Out for delivery (${d.method})', cs.primary)
+                    : (Icons.schedule_outlined, 'Pending', cs.onSurfaceVariant);
 
     return Container(
       padding: const EdgeInsets.all(Insets.lg),
@@ -216,11 +220,21 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
     }
 
     if (status == OrderStatus.dispatched) {
+      // Once proof is in, the baker waits for the customer (or the auto-confirm).
+      if (d?.proofSubmittedAt != null) {
+        return const [
+          InfoNote(
+            icon: Icons.hourglass_top_outlined,
+            text: 'Proof of delivery submitted. Waiting for the customer to '
+                'confirm receipt — it auto-confirms after 72 hours if they don\'t.',
+          ),
+        ];
+      }
       return [
         const InfoNote(
           icon: Icons.photo_camera_outlined,
-          text: 'Attach a drop-off photo to mark this order delivered. '
-              '(The customer can also confirm receipt themselves.)',
+          text: 'Attach a drop-off photo as proof of delivery. The customer '
+              'then confirms receipt (or it auto-confirms after 72 hours).',
         ),
         const SizedBox(height: Insets.md),
         OutlinedButton.icon(
@@ -239,10 +253,10 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
         ),
         const SizedBox(height: Insets.md),
         PrimaryButton(
-          label: 'Mark as delivered',
-          icon: Icons.check_circle_outline,
+          label: 'Submit proof of delivery',
+          icon: Icons.upload_outlined,
           isLoading: _busy,
-          onPressed: (_busy || _proofMediaId == null) ? null : _markDelivered,
+          onPressed: (_busy || _proofMediaId == null) ? null : _submitProof,
         ),
       ];
     }
@@ -263,20 +277,12 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
   Widget _customerActions(Delivery? d, OrderStatus? status) {
     final delivered = d?.isDelivered == true || status == OrderStatus.delivered;
     final canConfirm = status == OrderStatus.dispatched && !delivered;
-    // Only a baker can attach proof, so a delivered order WITH proof was closed
-    // out by the baker — not the customer confirming receipt.
-    final bakerMarked = delivered && d?.proofMediaId != null;
+    final proofSubmitted = d?.proofSubmittedAt != null;
 
     if (delivered) {
-      return InfoNote(
-        icon: bakerMarked
-            ? Icons.local_shipping_outlined
-            : Icons.check_circle_outline,
-        text: bakerMarked
-            ? 'Your baker marked this order delivered and attached a photo. '
-                'Settle the remaining balance on the Payment tab — or open a '
-                'dispute on the Issue tab if it didn\'t arrive or there\'s a problem.'
-            : 'You\'ve confirmed receipt. Thanks!',
+      return const InfoNote(
+        icon: Icons.check_circle_outline,
+        text: 'Delivery confirmed. Thanks!',
       );
     }
     if (!canConfirm) {
@@ -285,18 +291,32 @@ class _DeliveryViewState extends ConsumerState<DeliveryView> {
         text: 'You can confirm receipt once the baker dispatches your order.',
       );
     }
-    return PrimaryButton(
-      label: 'Confirm receipt',
-      icon: Icons.check_circle_outline,
-      isLoading: _busy,
-      onPressed: _busy
-          ? null
-          : () => _run(
-                () => ref
-                    .read(deliveryControllerProvider)
-                    .confirm(orderId: widget.orderId),
-                'Receipt confirmed.',
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (proofSubmitted) ...[
+          const InfoNote(
+            icon: Icons.photo_camera_outlined,
+            text: 'Your baker submitted a delivery photo. Confirm receipt below '
+                '— or open a dispute on the Issue tab if there\'s a problem. '
+                'It auto-confirms after 72 hours.',
+          ),
+          const SizedBox(height: Insets.md),
+        ],
+        PrimaryButton(
+          label: 'Confirm receipt',
+          icon: Icons.check_circle_outline,
+          isLoading: _busy,
+          onPressed: _busy
+              ? null
+              : () => _run(
+                    () => ref
+                        .read(deliveryControllerProvider)
+                        .confirm(orderId: widget.orderId),
+                    'Receipt confirmed.',
+                  ),
+        ),
+      ],
     );
   }
 }

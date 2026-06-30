@@ -51,8 +51,22 @@ class DeliveryController {
     _ref.invalidate(orderDetailProvider(orderId));
   }
 
-  /// Confirms receipt (proof-of-delivery), moving the order to DELIVERED and
-  /// issuing the balance invoice. A baker must supply [proofMediaId].
+  /// Baker submits proof-of-delivery. The order stays OUT_FOR_DELIVERY, awaiting
+  /// the customer's confirmation (or the timed auto-confirm).
+  Future<void> submitProof({
+    required String orderId,
+    required String proofMediaId,
+  }) async {
+    await _ref.read(apiClientProvider).post<Map<String, dynamic>>(
+      ApiEndpoints.orderDeliveryProof(orderId),
+      data: {'proof_media_id': proofMediaId},
+    );
+    _ref.invalidate(orderDeliveryProvider(orderId));
+    _ref.invalidate(orderDetailProvider(orderId));
+  }
+
+  /// Customer confirms receipt, moving the order to DELIVERED and issuing the
+  /// balance invoice.
   Future<void> confirm({
     required String orderId,
     String? proofMediaId,

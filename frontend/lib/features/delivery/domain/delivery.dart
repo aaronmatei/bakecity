@@ -7,6 +7,7 @@ class Delivery {
     this.courierRef,
     this.proofMediaId,
     this.dispatchedAt,
+    this.proofSubmittedAt,
     this.deliveredAt,
     this.confirmedAt,
   });
@@ -19,11 +20,17 @@ class Delivery {
   /// Media id of the proof-of-delivery photo, when one was attached.
   final String? proofMediaId;
   final DateTime? dispatchedAt;
+
+  /// When the baker submitted proof-of-delivery (awaiting customer confirmation).
+  final DateTime? proofSubmittedAt;
   final DateTime? deliveredAt;
   final DateTime? confirmedAt;
 
   bool get isDispatched => dispatchedAt != null;
   bool get isDelivered => deliveredAt != null;
+
+  /// Baker submitted proof but the order isn't confirmed delivered yet.
+  bool get awaitingConfirmation => proofSubmittedAt != null && !isDelivered;
 
   factory Delivery.fromJson(Map<String, dynamic> json) {
     return Delivery(
@@ -33,6 +40,7 @@ class Delivery {
       courierRef: json['courier_ref'] as String?,
       proofMediaId: json['proof_media_id'] as String?,
       dispatchedAt: _date(json['dispatched_at']),
+      proofSubmittedAt: _date(json['proof_submitted_at']),
       deliveredAt: _date(json['delivered_at']),
       confirmedAt: _date(json['confirmed_at']),
     );

@@ -72,6 +72,8 @@ class ApiEndpoints {
   static String orderDelivery(String id) => '/orders/$id/delivery';
   static String orderDeliveryDispatch(String id) =>
       '/orders/$id/delivery/dispatch';
+  static String orderDeliveryProof(String id) =>
+      '/orders/$id/delivery/proof';
   static String orderDeliveryConfirm(String id) =>
       '/orders/$id/delivery/confirm';
 
