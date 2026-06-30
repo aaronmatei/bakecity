@@ -13,6 +13,7 @@ class MyBakerProfile {
     this.dailyCapacity = 10,
     this.lat,
     this.lng,
+    this.followerCount = 0,
   });
 
   final String id;
@@ -30,6 +31,9 @@ class MyBakerProfile {
   final int dailyCapacity;
   final double? lat;
   final double? lng;
+
+  /// How many customers have favorited this bakery (public profile reads).
+  final int followerCount;
 
   /// Approved bakers may publish products and receive orders.
   bool get isApproved => status == BakerStatus.approved;
@@ -55,6 +59,7 @@ class MyBakerProfile {
       dailyCapacity: (json['daily_order_capacity'] as num?)?.toInt() ?? 10,
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
+      followerCount: (json['follower_count'] as num?)?.toInt() ?? 0,
     );
   }
 }

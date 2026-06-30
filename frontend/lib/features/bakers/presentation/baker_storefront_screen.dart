@@ -176,6 +176,12 @@ class _StoreInfo extends StatelessWidget {
                 icon: Icons.bakery_dining_outlined,
                 label: 'Up to ${baker.dailyCapacity}/day',
               ),
+              if (baker.followerCount > 0)
+                _InfoChip(
+                  icon: Icons.favorite_outline,
+                  label:
+                      '${baker.followerCount} follower${baker.followerCount == 1 ? '' : 's'}',
+                ),
             ],
           ),
           const SizedBox(height: Insets.lg),
