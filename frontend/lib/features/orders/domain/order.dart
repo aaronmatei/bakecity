@@ -39,6 +39,8 @@ class Order {
     this.totalCents,
     this.depositCents,
     this.balanceCents,
+    this.customerName,
+    this.bakerName,
     this.specs = const [],
   });
 
@@ -59,6 +61,11 @@ class Order {
   final int? totalCents;
   final int? depositCents;
   final int? balanceCents;
+
+  /// Counterparty display names from the API (the customer's personal name and
+  /// the bakery's business name).
+  final String? customerName;
+  final String? bakerName;
   final DateTime createdAt;
 
   /// The customer's requested attributes (flavor, size, message…).
@@ -88,6 +95,8 @@ class Order {
           (json['deposit_cents'] as num?)?.toInt(),
       balanceCents: _cents(json['balance_amount']) ??
           (json['balance_cents'] as num?)?.toInt(),
+      customerName: json['customer_name'] as String?,
+      bakerName: json['baker_name'] as String?,
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       specs: (json['specs'] as List?)
               ?.map((e) => OrderSpec.fromJson(e as Map<String, dynamic>))

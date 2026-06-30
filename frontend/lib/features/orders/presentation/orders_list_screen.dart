@@ -33,6 +33,7 @@ class OrdersListScreen extends ConsumerWidget {
         body: _OrdersBody(
           orders: orders,
           ref: ref,
+          viewerId: user?.id,
           keep: (_) => true,
           emptyTitle: 'No orders yet',
           emptyMessage: 'When you order a custom bake, you can track it here.',
@@ -56,6 +57,7 @@ class OrdersListScreen extends ConsumerWidget {
             _OrdersBody(
               orders: orders,
               ref: ref,
+              viewerId: uid,
               keep: (o) => o.customerId != uid,
               emptyTitle: 'Nothing to fulfil yet',
               emptyMessage:
@@ -64,6 +66,7 @@ class OrdersListScreen extends ConsumerWidget {
             _OrdersBody(
               orders: orders,
               ref: ref,
+              viewerId: uid,
               keep: (o) => o.customerId == uid,
               emptyTitle: 'No orders yet',
               emptyMessage: 'Orders you place as a customer show here.',
@@ -83,6 +86,7 @@ class _OrdersBody extends StatelessWidget {
     required this.keep,
     required this.emptyTitle,
     required this.emptyMessage,
+    this.viewerId,
   });
 
   final AsyncValue<List<Order>> orders;
@@ -90,6 +94,7 @@ class _OrdersBody extends StatelessWidget {
   final bool Function(Order) keep;
   final String emptyTitle;
   final String emptyMessage;
+  final String? viewerId;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +125,8 @@ class _OrdersBody extends StatelessWidget {
             padding: const EdgeInsets.all(Insets.screenH),
             itemCount: list.length,
             separatorBuilder: (_, __) => const SizedBox(height: Insets.lg),
-            itemBuilder: (context, i) => _OrderCard(order: list[i]),
+            itemBuilder: (context, i) =>
+                _OrderCard(order: list[i], viewerId: viewerId),
           );
         },
       ),
@@ -129,8 +135,9 @@ class _OrdersBody extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order});
+  const _OrderCard({required this.order, this.viewerId});
   final Order order;
+  final String? viewerId;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +149,11 @@ class _OrderCard extends StatelessWidget {
     final cancelled = order.status == OrderStatus.cancelled;
     // The agreed price is the order total, set once a quote is accepted.
     final hasPrice = order.totalCents != null && order.totalCents! > 0;
+    // Show the other party: a customer placing an order sees the bakery; a baker
+    // fulfilling one sees the customer.
+    final viewerIsCustomer = viewerId != null && order.customerId == viewerId;
+    final counterparty =
+        viewerIsCustomer ? order.bakerName : order.customerName;
 
     return PressScale(
       onTap: () => context.pushNamed(
@@ -186,6 +198,30 @@ class _OrderCard extends StatelessWidget {
                         style: context.tt.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
                       ),
+                      if (counterparty != null && counterparty.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(
+                                viewerIsCustomer
+                                    ? Icons.storefront_outlined
+                                    : Icons.person_outline,
+                                size: 13,
+                                color: cs.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                counterparty,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.tt.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: Insets.sm),
                       OrderStatusChip(status: order.status),
                     ],
