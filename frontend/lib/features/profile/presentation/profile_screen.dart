@@ -6,6 +6,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/press_scale.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../onboarding/application/onboarding_controller.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -15,6 +16,8 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final cs = context.cs;
     final isBaker = user?.isBaker ?? false;
+    final myBakerId =
+        isBaker ? ref.watch(onboardingControllerProvider).valueOrNull?.id : null;
     final name = user?.displayName ?? 'Guest';
 
     return Scaffold(
@@ -106,6 +109,15 @@ class ProfileScreen extends ConsumerWidget {
                 label: 'Manage my menu',
                 onTap: () => context.pushNamed(AppRoutes.manageProductsName),
               ),
+              if (myBakerId != null)
+                _SettingsTile(
+                  icon: Icons.visibility_outlined,
+                  label: 'View my storefront',
+                  onTap: () => context.pushNamed(
+                    AppRoutes.bakerStorefrontName,
+                    pathParameters: {'bakerId': myBakerId},
+                  ),
+                ),
               _SettingsTile(
                 icon: Icons.insights_outlined,
                 label: 'Insights',

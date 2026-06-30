@@ -14,6 +14,7 @@ class MyBakerProfile {
     this.lat,
     this.lng,
     this.followerCount = 0,
+    this.coverImageUrl,
   });
 
   final String id;
@@ -34,6 +35,9 @@ class MyBakerProfile {
 
   /// How many customers have favorited this bakery (public profile reads).
   final int followerCount;
+
+  /// Presigned storefront cover image URL, when the baker has uploaded one.
+  final String? coverImageUrl;
 
   /// Approved bakers may publish products and receive orders.
   bool get isApproved => status == BakerStatus.approved;
@@ -60,6 +64,7 @@ class MyBakerProfile {
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
       followerCount: (json['follower_count'] as num?)?.toInt() ?? 0,
+      coverImageUrl: json['cover_image_url'] as String?,
     );
   }
 }

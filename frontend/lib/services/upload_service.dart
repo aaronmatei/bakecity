@@ -20,6 +20,7 @@ class MediaKind {
   static const String production = 'production';
   static const String deliveryProof = 'delivery_proof';
   static const String product = 'product';
+  static const String bakerCover = 'baker_cover'; // storefront cover (owner-scoped)
   static const String kyc = 'kyc'; // baker identity document (owner-scoped)
 }
 

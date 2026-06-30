@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../services/upload_service.dart';
+import '../../../widgets/network_photo.dart';
+import '../../onboarding/application/onboarding_controller.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/app_error_view.dart';
@@ -68,10 +71,29 @@ class _CoverBar extends ConsumerWidget {
   const _CoverBar({required this.baker});
   final MyBakerProfile baker;
 
+  Future<void> _changeCover(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id = await ref
+          .read(uploadServiceProvider)
+          .pickAndUpload(kind: MediaKind.bakerCover);
+      if (id != null) {
+        ref.invalidate(bakerProfileProvider(baker.id));
+        messenger.showSnackBar(const SnackBar(content: Text('Cover updated.')));
+      }
+    } on AppException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = context.cs;
     final saved = ref.watch(favoriteBakersProvider).contains(baker.id);
+    final myBakerId = ref.watch(onboardingControllerProvider).valueOrNull?.id;
+    final isOwner = myBakerId != null && myBakerId == baker.id;
+    final hasCover =
+        baker.coverImageUrl != null && baker.coverImageUrl!.isNotEmpty;
     return SliverAppBar(
       pinned: true,
       expandedHeight: 176,
@@ -79,13 +101,20 @@ class _CoverBar extends ConsumerWidget {
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
       actions: [
-        IconButton(
-          tooltip: saved ? 'Saved' : 'Save bakery',
-          icon: Icon(saved ? Icons.favorite : Icons.favorite_border,
-              color: Colors.white),
-          onPressed: () =>
-              ref.read(favoriteBakersProvider.notifier).toggle(baker.id),
-        ),
+        if (isOwner)
+          IconButton(
+            tooltip: 'Change cover',
+            icon: const Icon(Icons.add_a_photo_outlined, color: Colors.white),
+            onPressed: () => _changeCover(context, ref),
+          )
+        else
+          IconButton(
+            tooltip: saved ? 'Saved' : 'Save bakery',
+            icon: Icon(saved ? Icons.favorite : Icons.favorite_border,
+                color: Colors.white),
+            onPressed: () =>
+                ref.read(favoriteBakersProvider.notifier).toggle(baker.id),
+          ),
       ],
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 56, bottom: 14, right: 16),
@@ -98,18 +127,22 @@ class _CoverBar extends ConsumerWidget {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [cs.primary, cs.secondary],
+            if (hasCover)
+              NetworkPhoto(url: baker.coverImageUrl, fit: BoxFit.cover, radius: 0)
+            else ...[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [cs.primary, cs.secondary],
+                  ),
                 ),
               ),
-            ),
-            const Center(
-              child: Icon(Icons.storefront, size: 56, color: Colors.white30),
-            ),
+              const Center(
+                child: Icon(Icons.storefront, size: 56, color: Colors.white30),
+              ),
+            ],
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
