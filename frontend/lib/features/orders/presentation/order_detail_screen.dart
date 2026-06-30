@@ -23,8 +23,8 @@ class OrderDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final orderAsync = ref.watch(orderDetailProvider(orderId));
-    final isCustomer =
-        ref.watch(authControllerProvider).user?.isCustomer ?? false;
+    final user = ref.watch(authControllerProvider).user;
+    final isCustomer = user?.isCustomer ?? false;
     final order = orderAsync.valueOrNull;
     final canCancel =
         order != null && orderCancellable(order.status, isCustomer: isCustomer);
@@ -34,7 +34,28 @@ class OrderDetailScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: orderAsync.maybeWhen(
-            data: (o) => Text('Order #${o.number ?? orderId}'),
+            data: (o) {
+              final counterparty = (user?.id != null && o.customerId == user!.id)
+                  ? o.bakerName
+                  : o.customerName;
+              if (counterparty == null || counterparty.isEmpty) {
+                return Text('Order #${o.number ?? orderId}');
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Order #${o.number ?? orderId}'),
+                  Text(
+                    'with $counterparty',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              );
+            },
             orElse: () => const Text('Order'),
           ),
           actions: [
