@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -144,6 +145,15 @@ func New(deps Deps) *gin.Engine {
 	// constructed after mediaSvc.
 	bakersSvc := bakers.NewService(bakersRepo, mediaSvc)
 	deliverySvc := delivery.NewService(deliveryRepo, ordersSvc, notificationsSvc)
+	// Background sweep: auto-confirm deliveries the customer never confirmed,
+	// once the baker's proof is older than the configured window.
+	if deps.DB != nil {
+		go deliverySvc.RunAutoConfirmLoop(
+			context.Background(),
+			time.Duration(deps.Cfg.DeliverySweepSeconds)*time.Second,
+			time.Duration(deps.Cfg.AutoConfirmHours)*time.Hour,
+		)
+	}
 	paymentsSvc := payments.NewService(paymentsRepo, psp, idem, ledgerSvc, ordersSvc, notificationsSvc)
 	disputesSvc := disputes.NewService(disputesRepo, ordersSvc, ledgerSvc, notificationsSvc)
 	reviewsSvc := reviews.NewService(reviewsRepo, ordersSvc)

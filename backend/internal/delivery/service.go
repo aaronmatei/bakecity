@@ -2,7 +2,9 @@ package delivery
 
 import (
 	"context"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/corebalt/bakecity/internal/notifications"
 	"github.com/corebalt/bakecity/internal/orders"
@@ -67,10 +69,40 @@ func (s *Service) Dispatch(ctx context.Context, actor Actor, orderID string, req
 	return d, nil
 }
 
-// Confirm records proof-of-delivery and moves an OUT_FOR_DELIVERY order to
-// DELIVERED, which issues the balance invoice. The customer or an admin may
-// confirm receipt; the baker may confirm only by attaching proof-of-delivery
-// (a courier drop-off photo), never on their own say-so.
+// SubmitProof records the baker's proof-of-delivery on an OUT_FOR_DELIVERY order
+// and nudges the customer to confirm receipt. It does NOT mark the order
+// delivered — only the customer's confirmation (or the timed sweep) does that.
+// Baker (or admin) only; a proof photo is required.
+func (s *Service) SubmitProof(ctx context.Context, actor Actor, orderID string, req ConfirmRequest) (*Delivery, error) {
+	order, err := s.orders.OrderByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID)
+	if err != nil {
+		return nil, err
+	}
+	if !actor.IsAdmin && actor.UserID != bakerUserID {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "only the order's baker can submit proof-of-delivery")
+	}
+	if req.ProofMediaID == "" {
+		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation, "a proof-of-delivery photo is required")
+	}
+	if order.Status != orders.StatusOutForDelivery {
+		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
+			"order is not out for delivery (status: "+order.Status+")")
+	}
+	d, err := s.repo.SubmitProof(ctx, orderID, req.ProofMediaID)
+	if err != nil {
+		return nil, err
+	}
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeDeliveryProof, map[string]any{"order_id": orderID})
+	return d, nil
+}
+
+// Confirm finalizes receipt for an OUT_FOR_DELIVERY order, moving it to
+// DELIVERED (which issues the balance invoice). Only the customer or an admin
+// may confirm — the baker uses SubmitProof and the timed sweep is the fallback.
 func (s *Service) Confirm(ctx context.Context, actor Actor, orderID string, req ConfirmRequest) (*Delivery, error) {
 	order, err := s.orders.OrderByID(ctx, orderID)
 	if err != nil {
@@ -83,32 +115,78 @@ func (s *Service) Confirm(ctx context.Context, actor Actor, orderID string, req 
 	if role == "" {
 		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden, "not a participant in this order")
 	}
-	if role == "baker" && req.ProofMediaID == "" {
-		return nil, pkg.NewAPIError(http.StatusUnprocessableEntity, pkg.ErrCodeValidation,
-			"a baker must attach proof-of-delivery to confirm receipt")
+	if role == "baker" {
+		return nil, pkg.NewAPIError(http.StatusForbidden, pkg.ErrCodeForbidden,
+			"only the customer confirms receipt; submit proof-of-delivery instead")
 	}
+	return s.markDelivered(ctx, order, req.ProofMediaID)
+}
 
+// markDelivered moves an out-for-delivery order to DELIVERED and notifies both
+// parties. Shared by customer confirmation and the auto-confirm sweep.
+func (s *Service) markDelivered(ctx context.Context, order *orders.Order, proofMediaID string) (*Delivery, error) {
 	switch order.Status {
 	case orders.StatusOutForDelivery:
-		if err := s.orders.MarkDelivered(ctx, orderID); err != nil {
+		if err := s.orders.MarkDelivered(ctx, order.ID); err != nil {
 			return nil, err
 		}
 	case orders.StatusDelivered:
-		// already delivered; allow re-confirm to attach/refresh proof
+		// already delivered; idempotent
 	default:
 		return nil, pkg.NewAPIError(http.StatusConflict, pkg.ErrCodeConflict,
 			"order is not out for delivery (status: "+order.Status+")")
 	}
-	d, err := s.repo.Confirm(ctx, orderID, req.ProofMediaID)
+	d, err := s.repo.Confirm(ctx, order.ID, proofMediaID)
 	if err != nil {
 		return nil, err
 	}
-	// Notify both parties; the balance invoice is now due.
-	s.notify.Notify(ctx, order.CustomerID, notifications.TypeDelivered, map[string]any{"order_id": orderID})
+	s.notify.Notify(ctx, order.CustomerID, notifications.TypeDelivered, map[string]any{"order_id": order.ID})
 	if bakerUserID, err := s.orders.BakerUserID(ctx, order.BakerID); err == nil {
-		s.notify.Notify(ctx, bakerUserID, notifications.TypeDelivered, map[string]any{"order_id": orderID})
+		s.notify.Notify(ctx, bakerUserID, notifications.TypeDelivered, map[string]any{"order_id": order.ID})
 	}
 	return d, nil
+}
+
+// AutoConfirmStale releases to DELIVERED any orders whose baker submitted proof
+// more than `window` ago without the customer confirming. Returns how many.
+func (s *Service) AutoConfirmStale(ctx context.Context, window time.Duration) (int, error) {
+	ids, err := s.repo.ListStaleAwaitingConfirmation(ctx, time.Now().Add(-window))
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, id := range ids {
+		order, err := s.orders.OrderByID(ctx, id)
+		if err != nil {
+			continue
+		}
+		if _, err := s.markDelivered(ctx, order, ""); err != nil {
+			log.Printf("auto-confirm: order %s failed: %v", id, err)
+			continue
+		}
+		n++
+	}
+	return n, nil
+}
+
+// RunAutoConfirmLoop periodically auto-confirms stale deliveries until ctx is
+// cancelled. Intended to run as a background goroutine.
+func (s *Service) RunAutoConfirmLoop(ctx context.Context, interval, window time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	log.Printf("delivery auto-confirm sweep every %s, window %s", interval, window)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n, err := s.AutoConfirmStale(ctx, window); err != nil {
+				log.Printf("delivery auto-confirm sweep failed: %v", err)
+			} else if n > 0 {
+				log.Printf("delivery auto-confirm: released %d order(s) to delivered", n)
+			}
+		}
+	}
 }
 
 // Get returns an order's delivery; participants and admins only.

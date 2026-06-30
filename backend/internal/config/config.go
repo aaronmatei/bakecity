@@ -44,6 +44,12 @@ type Config struct {
 	// Rate limiting (requests per minute per client IP).
 	RateLimitPerMinute     int
 	AuthRateLimitPerMinute int
+
+	// Delivery auto-confirmation: once a baker submits proof, an out-for-delivery
+	// order auto-confirms after AutoConfirmHours if the customer hasn't. The
+	// background sweep runs every DeliverySweepSeconds.
+	AutoConfirmHours     int
+	DeliverySweepSeconds int
 }
 
 // Load reads configuration from a .env file (if present) and the environment,
@@ -82,6 +88,9 @@ func Load() *Config {
 
 		RateLimitPerMinute:     getEnvInt("RATE_LIMIT_PER_MINUTE", 120),
 		AuthRateLimitPerMinute: getEnvInt("AUTH_RATE_LIMIT_PER_MINUTE", 10),
+
+		AutoConfirmHours:     getEnvInt("DELIVERY_AUTO_CONFIRM_HOURS", 72),
+		DeliverySweepSeconds: getEnvInt("DELIVERY_SWEEP_SECONDS", 900),
 	}
 }
 

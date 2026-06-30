@@ -31,6 +31,7 @@ const (
 	TypeDepositConfirmed = "deposit_confirmed"
 	TypeProductionUpdate = "production_update"
 	TypeOutForDelivery   = "out_for_delivery"
+	TypeDeliveryProof    = "delivery_proof" // baker submitted proof; awaiting customer confirmation
 	TypeDelivered        = "delivered"
 	TypeOrderCompleted   = "order_completed"
 	TypeReviewRequest    = "review_request"

@@ -25,6 +25,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/orders/:id/delivery", h.Get)
 	rg.POST("/orders/:id/delivery/dispatch", h.Dispatch)
+	rg.POST("/orders/:id/delivery/proof", h.SubmitProof)
 	rg.POST("/orders/:id/delivery/confirm", h.Confirm)
 }
 
@@ -58,6 +59,21 @@ func (h *Handler) Dispatch(c *gin.Context) {
 		return
 	}
 	pkg.Created(c, d)
+}
+
+// SubmitProof handles POST /orders/:id/delivery/proof (baker attaches proof).
+func (h *Handler) SubmitProof(c *gin.Context) {
+	var req ConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		pkg.Error(c, http.StatusBadRequest, pkg.ErrCodeBadRequest, err.Error())
+		return
+	}
+	d, err := h.svc.SubmitProof(c.Request.Context(), actorFrom(c), c.Param("id"), req)
+	if err != nil {
+		pkg.WriteError(c, err)
+		return
+	}
+	pkg.OK(c, d)
 }
 
 // Confirm handles POST /orders/:id/delivery/confirm.

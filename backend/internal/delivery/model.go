@@ -41,9 +41,12 @@ type Delivery struct {
 	Status       string     `json:"status"`
 	ProofMediaID string     `json:"proof_media_id,omitempty"`
 	DispatchedAt *time.Time `json:"dispatched_at,omitempty"`
-	DeliveredAt  *time.Time `json:"delivered_at,omitempty"`
-	ConfirmedAt  *time.Time `json:"confirmed_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
+	// ProofSubmittedAt is when the baker submitted proof-of-delivery; the order
+	// then awaits the customer's confirmation (or a timed auto-confirm).
+	ProofSubmittedAt *time.Time `json:"proof_submitted_at,omitempty"`
+	DeliveredAt      *time.Time `json:"delivered_at,omitempty"`
+	ConfirmedAt      *time.Time `json:"confirmed_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 // DispatchRequest is the payload for dispatching a delivery.
